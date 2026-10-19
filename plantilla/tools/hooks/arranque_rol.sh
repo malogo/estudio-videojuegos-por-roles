@@ -64,7 +64,7 @@ for F in "$RAIZ/$TABLON" "$RAIZ"/docs/direccion/entregas_nube/*.txt; do
         [[ "$F" == */entregas_nube/* ]] && FILA="$FILA   [sin volcar: ${F#"$RAIZ"/}]"
         echo "$FILA"
         N=$((N + 1))
-    done < <(grep -E "\| *$ROL[[:space:]]*\$" "$F" || true)
+    done < <(grep -E "\| *${ROL}[[:space:]]*\$" "$F" || true)
 done
 echo "($N fila(s))"
 if [[ "$ROL" == coordinador && -f "$RAIZ/$TABLON" ]]; then

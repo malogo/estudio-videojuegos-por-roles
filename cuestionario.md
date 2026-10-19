@@ -2,7 +2,7 @@
 
 La sesión de despliegue hace estas preguntas **por bloques**, enseña siempre el valor por defecto y no inventa
 respuestas: si la persona no sabe, se usa el defecto y se anota en `docs/direccion/pendientes_manana.md`.
-Cada respuesta acaba en una clave de `valores.json` (ver `ejemplo_valores_unity_pc.json`), que rellena los
+Cada respuesta acaba en una clave de `valores.json` (ver `ejemplo_valores_unity_pc.json` y `ejemplo_valores_godot_pc.json`), que rellena los
 marcadores `{{ASI}}` de `plantilla/`. Una clave con lista repite la línea por elemento (lista vacía = línea fuera).
 
 ## Bloque A — Proyecto

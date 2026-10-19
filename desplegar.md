@@ -16,7 +16,7 @@ rol: es «la sesión de despliegue». No toques nada del proyecto antes del paso
 - Un bloque cada vez (A, B, C, D, E, F), con el valor por defecto a la vista. Si la persona no sabe: defecto.
 - Si el motor ya está en la carpeta, deduce lo que puedas (versión, carpetas) y pide solo confirmación.
 - Escribe las respuestas en `valores.json` **fuera del proyecto** (p. ej. junto a la plantilla), con el formato de
-  `<PLANTILLA>/ejemplo_valores_unity_pc.json`. Enséñaselo a la persona antes de seguir.
+  `<PLANTILLA>/ejemplo_valores_unity_pc.json` (o `ejemplo_valores_godot_pc.json`). Enséñaselo a la persona antes de seguir.
 
 ## 4. Rellenar la plantilla
 ```bash

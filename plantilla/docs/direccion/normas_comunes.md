@@ -4,6 +4,7 @@
 ## 1. Identidad y roles
 - Cada sesión arranca con `./tools/hooks/arranque_rol.sh <rol>`: fija el rol (sin él, la guarda de Edit|Write bloquea)
   y muestra su ficha, su `memoria_<rol>.md` y sus filas del tablón desde el último vaciado. `fijar_rol.sh <rol>` solo fija el rol.
+  Con el rol fijado, el hook bloquea commits, entregas y motor en nombre de otro rol.
 - Nombres fijos de rol: {{ROLES}}.
 - `chatEspecialista` = sesión principal de un rol (diseña, decide, valida). `agenteEspecialista` = subagente que ejecuta un lote acotado.
 - La persona responsable es la única que decide alcance, normas nuevas, compras y publicación.

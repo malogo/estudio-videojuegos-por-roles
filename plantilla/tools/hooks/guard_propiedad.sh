@@ -15,12 +15,12 @@ source "$HOOKS_DIR/propiedad.sh"
 source "$HOOKS_DIR/leer_json.sh"
 
 ENTRADA="$(cat)"
-ORDEN="" RUTA="" SESION="" AGENTE=""
+RUTA="" SESION="" AGENTE=""
 if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
     echo "[guard_propiedad] Sin python ni node: no se puede comprobar la propiedad de archivos." >&2
     exit 0
 fi
-{ IFS= read -r -d '' ORDEN; IFS= read -r -d '' RUTA; IFS= read -r -d '' SESION; IFS= read -r -d '' AGENTE; } \
+{ IFS= read -r -d '' _; IFS= read -r -d '' RUTA; IFS= read -r -d '' SESION; IFS= read -r -d '' AGENTE; } \
     < <(printf '%s' "$ENTRADA" | campos_hook)
 [[ -z "$RUTA" ]] && exit 0
 

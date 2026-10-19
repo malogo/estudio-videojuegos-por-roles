@@ -269,5 +269,8 @@ cuestionario.md                Las preguntas del despliegue, con opciones y valo
 desplegar.md                   Los pasos que sigue la sesión de despliegue.
 rellenar_plantilla.py          Copia la plantilla al proyecto y rellena los huecos {{ASI}}.
 ejemplo_valores_unity_pc.json  Ejemplo de respuestas (Unity, PC) en el formato que usa el script.
+ejemplo_valores_godot_pc.json  Lo mismo para Godot (PC).
+actualizar.md                  Cómo llevar una versión nueva de la plantilla a un proyecto ya desplegado.
+.github/workflows/             Prueba automática de la plantilla (despliegue Godot y Unity + pruebas).
 plantilla/                     Todos los archivos genéricos, con huecos {{ASI}}.
 extras/godot, extras/unity     Comprobaciones propias de cada motor.

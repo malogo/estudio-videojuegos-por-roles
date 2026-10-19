@@ -68,6 +68,18 @@ espera_rechazo "ni coordinador edita el tablón a mano (lo archiva un script)" "
 espera_ok "fijar_rol.sh auditor-calidad" orden "./tools/hooks/fijar_rol.sh auditor-calidad"
 espera_rechazo "otro rol NO edita el tablón a mano" "entregar.sh" edit "$R/docs/direccion/tablon.md"
 espera_ok "fijar_rol.sh coordinador" orden "./tools/hooks/fijar_rol.sh coordinador"
+espera_rechazo "commit como otro rol bloqueado (sesión coordinador)" "actúa como 'auditor-calidad'" \
+    orden "git commit -m 'auditor-calidad: x' -- docs/a.md"
+espera_rechazo "... también con -qm y git -C" "actúa como" orden "git -C . commit -qm 'auditor-calidad: x' -- docs/a.md"
+espera_rechazo "entregar.sh como otro rol bloqueado" "actúa como" orden "./tools/hooks/entregar.sh auditor-calidad x y coordinador"
+espera_rechazo "motor_silencioso.sh como otro rol bloqueado" "actúa como" orden "./tools/motor_silencioso.sh arquitecto-sistemas --import"
+espera_ok "commit con el rol propio permitido" orden "git commit -m 'coordinador: x' -- docs/a.md"
+espera_rechazo "orden bloqueada: no registra el rol que fijaba" "actúa como" \
+    orden "./tools/hooks/fijar_rol.sh auditor-calidad && git commit -m 'arquitecto-sistemas: x' -- a"
+espera_ok "... la sesión sigue siendo coordinador" orden "./tools/hooks/entregar.sh coordinador x y auditor-calidad"
+espera_ok "fijar el rol y entregar como él en la misma orden" \
+    orden "./tools/hooks/fijar_rol.sh auditor-calidad && ./tools/hooks/entregar.sh auditor-calidad x y coordinador"
+espera_ok "fijar_rol.sh coordinador" orden "./tools/hooks/fijar_rol.sh coordinador"
 
 echo "== Commits (pre-commit y commit-msg)"
 echo cambio >> docs/direccion/plan_nocturno.md

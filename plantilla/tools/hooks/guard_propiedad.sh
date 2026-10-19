@@ -9,7 +9,6 @@
 set -uo pipefail
 
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RAIZ="$(cd "$HOOKS_DIR/../.." && pwd -P)"
 # shellcheck source=propiedad.sh
 source "$HOOKS_DIR/propiedad.sh"
 # shellcheck source=leer_json.sh
@@ -38,6 +37,9 @@ absoluta() {
     p="$(cd "$base" && pwd -P)" || p="$base"
     printf '%s%s' "${p%/}" "$resto"
 }
+# La raíz se normaliza igual que la ruta editada: en Git Bash realpath traduce los montajes (/tmp -> /c/Users/...)
+# y pwd -P no, así que mezclar los dos daría por "fuera del repo" archivos que están dentro.
+RAIZ="$(absoluta "$HOOKS_DIR/../..")"
 
 ENTRADA="$(cat)"
 RUTA="" SESION="" AGENTE="" LEIDO=""

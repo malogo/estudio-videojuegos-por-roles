@@ -24,7 +24,7 @@ jobs:
         so: [ubuntu-latest, macos-latest, windows-latest]
         motor: [godot, unity]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: bash 4 o posterior (macOS trae 3.2)
         if: runner.os == 'macOS'
@@ -69,6 +69,18 @@ jobs:
             coordinador -- tools/auditoria/excepciones_proceso.txt
           ./tools/auditoria/auditoria_proceso.sh
           if git status --short | grep -v '^?? docs/calidad/'; then echo "::error::El árbol no quedó limpio"; exit 1; fi
+
+      - name: Un clon con core.autocrlf deja los scripts en LF (.gitattributes, Windows)
+        if: runner.os == 'Windows'
+        run: |
+          C="$RUNNER_TEMP/clon"
+          git -c core.autocrlf=true clone -q "$DESPLIEGUE" "$C"
+          cd "$C"
+          if grep -l $'\r' $(git ls-files -- 'tools/*.sh') tools/hooks/pre-commit tools/hooks/commit-msg; then
+            echo "::error::Scripts con CRLF tras clonar: bash no los entendería"; exit 1
+          fi
+          grep -q $'\r' CLAUDE.md && echo "core.autocrlf activo (CLAUDE.md en CRLF) y los scripts en LF: bien"
+          ./tools/hooks/fijar_rol.sh coordinador
 
       - name: Con bash 3.2 las guardas fallan cerradas y los avisos no bloquean (macOS)
         if: runner.os == 'macOS'

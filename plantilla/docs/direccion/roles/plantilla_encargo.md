@@ -16,5 +16,6 @@ Esfuerzo: <high | medium> (el fijado en el agente elegido)
 ```
 
 ## Registro en el commit del lote
-Una línea por encargo en el cuerpo del commit, para medir coste y fallos:
+Una línea por encargo en el cuerpo del commit, para medir coste y fallos
+(con `./tools/hooks/entregar.sh ... --cuerpo "<línea>" -- <rutas>`):
 `encargo: <agente> | <esfuerzo> | a la primera: <sí|no>`

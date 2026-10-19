@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prueba rápida de las guardas del sistema (commit-msg, pre-commit, pre_tool_guard.sh, guard_propiedad.sh,
-# with_lock.sh en sus dos modos). Trabaja en un repo temporal con una copia de tools/: no toca el proyecto.
+# entregar.sh, with_lock.sh en sus dos modos y motor_silencioso.sh con un motor falso). Trabaja en un repo temporal con una copia de tools/: no toca el proyecto.
 # Sin la orden flock (Git Bash, macOS sin Homebrew) se omiten las pruebas del modo flock.
 # Uso: ./tools/hooks/tests/prueba_guardas.sh      (sale con 0 si todo pasa)
 
@@ -53,6 +53,10 @@ espera_rechazo "git commit -am bloqueado" "Prohibido" orden "git commit -am x"
 espera_rechazo "git stash bloqueado" "Prohibido" orden "git stash"
 espera_rechazo "git reset --hard bloqueado" "Prohibido" orden "cd /tmp && git reset --hard"
 espera_ok "git commit por rutas permitido" orden "git commit -m 'x' -- docs/a.md"
+espera_rechazo "echo >> al tablón bloqueado" "entregar.sh" orden "echo x >> docs/direccion/tablon.md"
+espera_rechazo "printf >tablón (sin espacio) bloqueado" "entregar.sh" orden "cd docs/direccion && printf x>tablon.md"
+espera_rechazo "tee -a al tablón bloqueado" "entregar.sh" orden "echo x | tee -a docs/direccion/tablon.md"
+espera_ok "leer el tablón permitido" orden "grep coordinador docs/direccion/tablon.md > /tmp/x"
 
 echo "== Propiedad al editar (hook PreToolUse de Edit|Write)"
 espera_rechazo "Edit sin rol declarado bloqueado" "Declara antes tu rol" edit "$R/docs/direccion/plan_nocturno.md"
@@ -60,7 +64,10 @@ espera_ok "arranque_rol.sh coordinador registra el rol" orden "./tools/hooks/fij
 espera_ok "coordinador edita su plan" edit "$R/docs/direccion/plan_nocturno.md"
 espera_rechazo "coordinador NO edita un hook (de arquitecto-sistemas)" "no de 'coordinador'" edit "$R/tools/hooks/pre-commit"
 espera_rechazo "ruta sin dueño bloqueada" "no tiene dueño" edit "$R/sin_dueno/x.txt"
-espera_ok "el tablón es de todos" edit "$R/docs/direccion/tablon.md"
+espera_ok "coordinador edita el tablón (para archivarlo)" edit "$R/docs/direccion/tablon.md"
+espera_ok "fijar_rol.sh auditor-calidad" orden "./tools/hooks/fijar_rol.sh auditor-calidad"
+espera_rechazo "otro rol NO edita el tablón a mano" "entregar.sh" edit "$R/docs/direccion/tablon.md"
+espera_ok "fijar_rol.sh coordinador" orden "./tools/hooks/fijar_rol.sh coordinador"
 
 echo "== Commits (pre-commit y commit-msg)"
 echo cambio >> docs/direccion/plan_nocturno.md
@@ -77,6 +84,58 @@ espera_rechazo "commit de ruta ajena rechazado" "no es dueño" \
 printf '%s | coordinador | prueba | ruta | auditor-calidad\n' "2000-01-01 00:00" >> docs/direccion/tablon.md
 espera_rechazo "fila con hora inventada rechazada" "hora real" \
     git commit -m "arquitecto-sistemas: hook" -- tools/hooks/pre-commit docs/direccion/tablon.md
+
+echo "== Entregas (entregar.sh y origen de las filas)"
+git checkout -q HEAD -- docs/direccion/tablon.md tools/hooks/pre-commit
+EN=./tools/hooks/entregar.sh
+filas_commit() { git show --format= -U0 HEAD -- "${1:-docs/direccion/tablon.md}" | grep -c '^+[0-9]'; }
+espera_codigo "campo con '|' rechazado" 64 "no pueden llevar" $EN coordinador "a | b" "ruta" auditor-calidad
+espera_codigo "destino inválido rechazado" 64 "Destino no válido" $EN coordinador "x" "ruta" nadie
+# Escenario reproducido: A deja su fila sin commitear y B entrega
+fila auditor-calidad
+echo "plan B" >> docs/direccion/plan_nocturno.md
+espera_codigo "B entrega con una fila ajena pendiente: entra y avisa" 0 "sin commitear" \
+    $EN coordinador "plan nuevo" docs/direccion/plan_nocturno.md auditor-calidad -- docs/direccion/plan_nocturno.md
+if [[ "$(filas_commit)" == 1 ]] && git show --format= HEAD -- docs/direccion/tablon.md | grep -q '^+.* | coordinador | plan nuevo |' \
+    && git diff -U0 -- docs/direccion/tablon.md | grep -q '^+.* | auditor-calidad | prueba |'; then
+    ok "... su commit lleva solo su fila; la de A sigue pendiente en el árbol"
+else mal "el commit de B se llevó filas ajenas o perdió la de A"; fi
+if [[ -z "$(git diff --cached --name-only)" ]]; then ok "... y el índice compartido queda limpio"
+else git diff --cached --name-only > "$TMP/salida"; mal "el índice compartido quedó con cambios"; fi
+espera_ok "A commitea después su fila sin problema" git commit -m "auditor-calidad: aviso" -- docs/direccion/tablon.md
+fila auditor-calidad
+espera_rechazo "commit con fila de otro origen rechazado" "origen no es" \
+    git commit -m "coordinador: aviso" -- docs/direccion/tablon.md
+git checkout -q HEAD -- docs/direccion/tablon.md
+cp docs/direccion/tablon.md "$TMP/tablon"
+echo "# cambio" >> tools/hooks/pre-commit
+espera_codigo "entrega rechazada por un hook (ruta ajena)" 1 "no es dueño" \
+    $EN coordinador "toca un hook" tools/hooks/pre-commit arquitecto-sistemas -- tools/hooks/pre-commit
+if cmp -s docs/direccion/tablon.md "$TMP/tablon"; then ok "... y el tablón queda como estaba"; else mal "el tablón no se restauró"; fi
+git checkout -q HEAD -- tools/hooks/pre-commit
+echo nuevo > tools/auditoria/nuevo.txt
+espera_codigo "archivo nuevo entregado con --cuerpo" 0 "Entregado" $EN auditor-calidad "informe" tools/auditoria/nuevo.txt \
+    coordinador --cuerpo "encargo: agente-ejecutor-lote | high | a la primera: sí" -- tools/auditoria/nuevo.txt
+if git ls-files --error-unmatch tools/auditoria/nuevo.txt >/dev/null 2>&1 && git log -1 --format=%b | grep -q "^encargo:"; then
+    ok "... el archivo y el cuerpo van en el commit"; else mal "falta el archivo nuevo o el cuerpo en el commit"; fi
+espera_codigo "--nube escribe en entregas_nube/<lote>.txt" 0 "Entregado" $EN coordinador "desde la nube" x coordinador --nube L7
+if [[ "$(filas_commit docs/direccion/entregas_nube/L7.txt)" == 1 ]] && ! git show --format= --name-only HEAD | grep -q tablon.md; then
+    ok "... y no toca el tablón"; else mal "--nube tocó el tablón o no dejó su fila"; fi
+$EN auditor-calidad "lote de la nube" x coordinador --nube L8 >/dev/null 2>&1
+./tools/hooks/volcar_entregas_nube.sh >/dev/null 2>&1
+espera_ok "volcado de entregas_nube por coordinador aceptado (filas de otro origen)" git commit -m "coordinador: vuelca" \
+    -- docs/direccion/tablon.md docs/direccion/entregas_nube/L7.txt docs/direccion/entregas_nube/L8.txt
+ANTES=$(git rev-list --count HEAD)
+$EN coordinador "a la vez 1" x auditor-calidad >"$TMP/e1" 2>&1 & E1=$!
+$EN auditor-calidad "a la vez 2" x coordinador >"$TMP/e2" 2>&1 & E2=$!
+wait "$E1"; R1=$?; wait "$E2"; R2=$?
+if (( R1 == 0 && R2 == 0 )) && (( $(git rev-list --count HEAD) == ANTES + 2 )) && git diff --quiet HEAD -- docs/direccion/tablon.md; then
+    ok "dos entregas a la vez: entran las dos, una detrás de otra"
+else cat "$TMP/e1" "$TMP/e2" > "$TMP/salida"; mal "dos entregas a la vez (códigos $R1 y $R2)"; fi
+: > "$(git rev-parse --git-path index.lock)"
+espera_codigo ".git/index.lock que no se va: no entrega y no lo borra" 75 "index.lock" $EN coordinador "x" x auditor-calidad
+if [[ -e "$(git rev-parse --git-path index.lock)" ]]; then ok "... y el index.lock sigue ahí"; else mal "entregar.sh borró index.lock"; fi
+rm -f "$(git rev-parse --git-path index.lock)"
 
 echo "== Candados"
 CL=./tools/locks/with_lock.sh

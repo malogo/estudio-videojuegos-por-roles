@@ -3,6 +3,8 @@
 # El mensaje debe empezar por "<rol>:" y todas las rutas del commit deben ser de ese rol
 # según tools/hooks/propiedad.tsv. Excepciones: las rutas "*" (tablón y docs/direccion/entregas_nube/*.txt)
 # y los commits de merge.
+# Además, toda fila que se añade al tablón o a entregas_nube debe tener como origen el rol del commit: así un commit
+# nunca se lleva la fila de otra sesión (salvo merges y las filas que se vuelcan de entregas_nube al tablón).
 # Se instala con: git config core.hooksPath tools/hooks
 
 set -uo pipefail
@@ -35,6 +37,26 @@ if (( ${#AJENAS[@]} )); then
     echo "[ERROR COMMIT-MSG] '$ROL' no es dueño de estas rutas:" >&2
     printf '%s\n' "${AJENAS[@]}" >&2
     echo "Pide el cambio por tablón a su dueño. Si la ruta no tiene dueño, pide a arquitecto-sistemas que la asigne." >&2
+    exit 1
+fi
+
+# Filas añadidas con otro origen (las que salen de entregas_nube en este mismo commit son un volcado)
+TABLON="docs/direccion/tablon.md"
+ENTREGAS="docs/direccion/entregas_nube"
+VOLCADAS="$(git diff --cached -U0 -- "$ENTREGAS/*.txt" | grep '^-' | grep -v '^---' | sed 's/^-//' || true)"
+FILAS_AJENAS=()
+while IFS= read -r FILA; do
+    FILA="${FILA%$'\r'}"
+    [[ -z "${FILA// /}" || "$FILA" == \#* ]] && continue
+    grep -qxF -- "$FILA" <<< "$VOLCADAS" && continue
+    ORIGEN="$(cut -d'|' -f2 <<< "$FILA")"
+    ORIGEN="${ORIGEN#"${ORIGEN%%[![:space:]]*}"}"; ORIGEN="${ORIGEN%"${ORIGEN##*[![:space:]]}"}"
+    [[ "$ORIGEN" == "$ROL" ]] || FILAS_AJENAS+=("  $FILA")
+done < <(git diff --cached -U0 -- "$TABLON" "$ENTREGAS/*.txt" | grep '^+' | grep -v '^+++' | sed 's/^+//')
+if (( ${#FILAS_AJENAS[@]} )); then
+    echo "[ERROR COMMIT-MSG] Este commit de '$ROL' añade filas cuyo origen no es '$ROL' (son de otra sesión):" >&2
+    printf '%s\n' "${FILAS_AJENAS[@]}" >&2
+    echo "Entrega con ./tools/hooks/entregar.sh, que solo commitea tu fila; las ajenas las commitea su dueño." >&2
     exit 1
 fi
 exit 0

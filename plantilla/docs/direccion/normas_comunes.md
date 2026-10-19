@@ -20,14 +20,17 @@
 ## 3. Tablón (`docs/direccion/tablon.md`)
 - Append-only. Formato: `YYYY-MM-DD HH:MM | origen | qué se entregó | ruta o commit | destino`.
 - Lectura por rol: la hace `arranque_rol.sh`; para más historia, `grep "| <rol>$" docs/direccion/tablon.md`. No leas el tablón entero.
-- La hora de cada fila sale de `date "+%Y-%m-%d %H:%M"`; nunca se escribe a mano.
+- Las filas solo se añaden con `./tools/hooks/entregar.sh <rol> "<qué>" "<ruta o commit>" <destino> [-- <rutas>]`:
+  pone la hora real y commitea tu fila con tus rutas en una orden. Escribir en el tablón a mano (Edit, `>>`, `tee`) está bloqueado.
 - Para despertar a otro rol: entrada en el tablón + mensaje `"Tienes trabajo en el tablón"`.
 - Solo `coordinador` archiva el tablón (al llegar a ~200 líneas).
 - El tablón es la única fuente del estado de los lotes; el plan nocturno solo planifica. Estados del plan: `pendiente`, `en curso`, `hecho`, `entregado`, `bloqueado`.
 
 ## 4. Git (árbol compartido)
 - PROHIBIDO: `git stash`, `git add -A`/`.`, `git commit -a`, `git reset --hard`, `git checkout|restore .`, `git clean -f`.
-- Commit siempre por rutas, con prefijo `<rol>:` y tu fila del tablón: `git commit -m "<rol>: <qué>" -- <rutas> docs/direccion/tablon.md`.
+- Commit siempre por rutas, con prefijo `<rol>:` y tu fila del tablón: `./tools/hooks/entregar.sh <rol> "<qué>" "<ruta o commit>" <destino> -- <rutas>`
+  (commit `<rol>: <qué>` con tus rutas y solo tu fila; `--cuerpo "<línea>"` para la línea de encargo). Toda fila de un commit
+  debe tener como origen el rol del commit: las filas ajenas sin commitear las commitea su dueño.
 - Lo impiden automáticamente el hook PreToolUse (`.claude/settings.json`, también en subagentes)
   y los hooks `pre-commit` y `commit-msg` (`git config core.hooksPath tools/hooks`). Si te bloquean, no los esquives.
 - Nunca reviertas ni sobrescribas cambios que no son tuyos aunque aparezcan en `git status`.
@@ -87,7 +90,7 @@
 
 ## 11. Sesiones en la nube
 - Al empezar: `./tools/hooks/arranque_rol.sh <rol>` (activa los hooks y fija el rol). Trabaja en la rama automática de la sesión, partiendo de `{{RAMA_PRINCIPAL}}` actualizada, y abre PR hacia `{{RAMA_PRINCIPAL}}`.
-- Merge solo la persona responsable (o `coordinador` si así lo pide). Horas siempre con `TZ={{ZONA_HORARIA}} date "+%Y-%m-%d %H:%M"`.
-- La fila de la entrega va en `docs/direccion/entregas_nube/<lote>.txt` (mismo formato que el tablón), en el commit de la entrega;
-  la nube no edita `tablon.md`. Tras fusionar, `coordinador` ejecuta `./tools/hooks/volcar_entregas_nube.sh` y commitea por rutas.
+- Merge solo la persona responsable (o `coordinador` si así lo pide). Horas siempre en `{{ZONA_HORARIA}}` (`entregar.sh` ya la usa).
+- La fila de la entrega va en `docs/direccion/entregas_nube/<lote>.txt`, en el commit de la entrega:
+  `./tools/hooks/entregar.sh <rol> "<qué>" "<ruta o commit>" <destino> --nube <lote> -- <rutas>`; la nube no edita `tablon.md`. Tras fusionar, `coordinador` ejecuta `./tools/hooks/volcar_entregas_nube.sh` y commitea por rutas.
 - No pueden avisar a otros roles: la persona responsable pega el resultado al coordinador.

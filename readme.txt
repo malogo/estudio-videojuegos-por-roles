@@ -95,8 +95,10 @@ tools/hooks/                       Las guardas:
    pre_tool_guard.sh               Bloquea órdenes prohibidas antes de ejecutarlas.
    guard_propiedad.sh              Bloquea editar archivos de otro rol.
    reglas_comando.sh               Las reglas de órdenes prohibidas (git y motor).
+   entregar.sh                     Entrega en una orden: línea del tablón con hora real + guardado.
    pre-commit                      Al guardar: exige la línea del tablón y que tenga hora real.
-   commit-msg                      Al guardar: exige "<rol>: ..." y que todo sea de ese rol.
+   commit-msg                      Al guardar: exige "<rol>: ..." y que todo sea de ese rol (también
+                                   las líneas del tablón: nadie guarda la línea de otro).
    pre-commit-motor.sh             (opcional) comprobaciones propias del motor.
    volcar_entregas_nube.sh         Pasa al tablón las líneas de la nube.
    git_guard.sh, leer_json.sh      Piezas auxiliares.
@@ -147,13 +149,14 @@ tú copies nada. En una terminal funciona igual, pero los avisos los escribes t�
 
 6.2 El ciclo de un lote (lo que pasa cada vez)
   1. Pides al coordinador: "lanza la ronda N" (o "encarga X a <rol>").
-  2. El coordinador escribe la línea en el tablón dirigida a ese rol y le manda a su
+  2. El coordinador escribe la línea en el tablón dirigida a ese rol (con entregar.sh) y le manda a su
      ventana el aviso "Tienes trabajo en el tablón". (Si la ventana se limpió antes, ver
      6.3: el aviso debe llevar también el rol.) En la terminal, ese aviso lo pegas tú.
      La primera vez, la app puede pedirte en la ventana de destino que aceptes el mensaje.
-  3. El especialista trabaja: hace el lote, pasa sus pruebas, guarda (commit) solo sus
-     archivos y deja en el tablón su línea de entrega dirigida al siguiente (auditor o
-     coordinador).
+  3. El especialista trabaja: hace el lote, pasa sus pruebas y lo entrega con una sola
+     orden (./tools/hooks/entregar.sh): guarda (commit) solo sus archivos junto con su línea
+     del tablón, con la hora real, dirigida al siguiente (auditor o coordinador). Nadie
+     escribe el tablón a mano, así una sesión nunca se lleva la línea de otra.
   4. Si la entrega va al auditor, el coordinador lo despierta igual; el auditor prueba y
      acepta o devuelve el lote al dueño. Nada te llega sin pasar por él.
   5. Al acabar, el especialista actualiza su memoria (qué hizo, qué descartó, dónde se

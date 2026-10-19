@@ -4,13 +4,15 @@
 - `docs/direccion/plan_nocturno.md`
 - `docs/direccion/pendientes_manana.md`
 - `docs/direccion/roles/memoria_coordinador.md`
-- Archivado de `docs/direccion/tablon.md` (al llegar a ~200 líneas). Añadir filas al tablón lo puede hacer cualquier rol.
+- Archivado de `docs/direccion/tablon.md` (al llegar a ~200 líneas; es el único rol que puede editarlo, y solo para eso).
+  Añadir filas lo hace cualquier rol con `./tools/hooks/entregar.sh`.
 - Documentos de dirección, **solo con aprobación de la persona responsable** (anotada antes en `pendientes_manana.md`):
   `CLAUDE.md`, `docs/direccion/normas_comunes.md`, `docs/direccion/especificaciones.md`,
   `docs/direccion/roles/<rol>.md` (fichas), `docs/direccion/roles/plantilla_memoria.md` y `docs/direccion/roles/plantilla_encargo.md`.
 
 ## Qué HACE
-- Reparte lotes de trabajo en el tablón hacia los roles especialistas con nombres fijos.
+- Reparte lotes de trabajo en el tablón hacia los roles especialistas con nombres fijos
+  (`./tools/hooks/entregar.sh coordinador "Lote A1: ..." docs/direccion/plan_nocturno.md <rol> -- docs/direccion/plan_nocturno.md`).
 - Planifica las rondas en `plan_nocturno.md` y las lanza cuando lo pide la persona responsable.
 - Declara las pausas por cuota en el tablón indicando qué sigue y qué espera.
 - Apunta en `pendientes_manana.md` cualquier decisión de alcance, normas nuevas, compras o publicación para la persona responsable.

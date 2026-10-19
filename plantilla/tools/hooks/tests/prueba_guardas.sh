@@ -339,10 +339,11 @@ else mal "efectos colaterales mal listados"; fi
 espera_codigo "sin efectos colaterales no se avisa" 0 "Resultado: 0" $MS auditor-calidad
 if grep -q "creado/cambiado" "$TMP/salida"; then mal "avisa de efectos colaterales que no hay"; fi
 rm -f tools/hooks/x.gd.uid tools/hooks/y.gd.uid tools/hooks/previo.uid; git checkout -q -- tools/auditoria/ruido_motor.txt
-$CL motor arquitecto-sistemas sleep 1 & W=$!
-pid_comando motor >/dev/null
+# Comando largo que se mata al acabar: motor_silencioso.sh tarda más de 1 s en llegar al candado en Git Bash
+$CL motor arquitecto-sistemas sleep 30 & W=$!
+H="$(pid_comando motor)"
 espera_codigo "candado del motor ocupado -> 75" 75 "LOCK OCUPADO" $MS auditor-calidad
-wait "$W"
+kill "$H" 2>/dev/null; wait "$W" 2>/dev/null
 for i in $(seq 40); do : > ".motor_logs/2000-01-01_0000$(printf '%02d' "$i")_viejo.log"; done
 $MS auditor-calidad >/dev/null 2>&1
 N_LOGS=$(find .motor_logs -name '*.log' | wc -l | tr -d ' ')

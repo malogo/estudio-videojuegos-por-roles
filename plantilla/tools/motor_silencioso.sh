@@ -49,8 +49,10 @@ trap 'rm -rf "$TMP"' EXIT
 # Foto de los archivos versionables con cambios (estado + fecha de modificación). Sin git: no se compara.
 # Las rutas son relativas a la raíz del repositorio, como en propiedad.tsv. Una por línea: "<XY> <fecha> <ruta>".
 # Los logs y los candados no cuentan aunque falten en .gitignore.
+# PROPIOS = carpeta del proyecto dentro del repositorio ("" o "sub/"). Se pide a git: en Git Bash ROOT es /c/... y
+# --show-toplevel da C:/..., así que quitar un prefijo del otro no vale.
 RAIZ_GIT="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null)" || RAIZ_GIT=""
-PROPIOS="${ROOT#"$RAIZ_GIT"}"; PROPIOS="${PROPIOS#/}${PROPIOS:+/}"
+PROPIOS="$(git -C "$ROOT" rev-parse --show-prefix 2>/dev/null)" || PROPIOS=""
 if stat -c %Y / >/dev/null 2>&1; then STAT_FMT=(-c '%Y %n'); else STAT_FMT=(-f '%m %N'); fi
 foto_git() {
     local salida="$1" entrada estado ruta

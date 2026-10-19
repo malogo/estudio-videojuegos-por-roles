@@ -242,6 +242,16 @@ espera_codigo "motor que sale con 2 -> 2" 2 "Resultado: 2" env MOTOR_FALSO_CODIG
 espera_codigo "5.000 líneas de error -> 65 con resumen corto" 65 "15 primeros de 5000" env MOTOR_FALSO_LINEAS=5000 $MS auditor-calidad
 if (( $(wc -l < "$TMP/salida") <= 25 )); then ok "... y el resumen cabe en 25 líneas ($(wc -l < "$TMP/salida" | tr -d ' '))"
 else mal "el resumen pasa de 25 líneas"; fi
+echo previo > tools/hooks/previo.uid  # cambio de antes de lanzar el motor: no es suyo
+espera_codigo "el motor crea archivos versionables -> mismo código (0)" 0 "creado/cambiado 3 archivo" \
+    env MOTOR_FALSO_CREA="tools/hooks/x.gd.uid tools/hooks/y.gd.uid tools/auditoria/ruido_motor.txt" $MS auditor-calidad
+if grep -q "arquitecto-sistemas: 2 (no los reviertas" "$TMP/salida" && grep -q "auditor-calidad: 1 (tuyos" "$TMP/salida" \
+    && ! grep -q "previo.uid" "$TMP/salida" && ! grep -q "^  .*motor_logs" "$TMP/salida"; then
+    ok "... listados por dueño (ajenos y tuyos), sin lo previo ni los logs"
+else mal "efectos colaterales mal listados"; fi
+espera_codigo "sin efectos colaterales no se avisa" 0 "Resultado: 0" $MS auditor-calidad
+if grep -q "creado/cambiado" "$TMP/salida"; then mal "avisa de efectos colaterales que no hay"; fi
+rm -f tools/hooks/x.gd.uid tools/hooks/y.gd.uid tools/hooks/previo.uid; git checkout -q -- tools/auditoria/ruido_motor.txt
 $CL motor arquitecto-sistemas sleep 1 & W=$!
 pid_comando motor >/dev/null
 espera_codigo "candado del motor ocupado -> 75" 75 "LOCK OCUPADO" $MS auditor-calidad

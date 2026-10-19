@@ -35,6 +35,8 @@
   y los hooks `pre-commit` y `commit-msg` (`git config core.hooksPath tools/hooks`). Si te bloquean, no los esquives.
 - Nunca reviertas ni sobrescribas cambios que no son tuyos aunque aparezcan en `git status`.
 - Los archivos que el motor acompaña de metadatos (p. ej. `.meta`, `.import`, `.uid`) se commitean junto a ellos.
+- Lo que el motor genere en archivos de otro dueño (lo lista `motor_silencioso.sh`) no se revierte ni se commitea:
+  se avisa al dueño con `./tools/hooks/entregar.sh <rol> "<qué generó el motor>" "<rutas>" <dueño>` (sin `--`).
 
 ## 5. Motor ({{MOTOR}}) y sonido
 - PROHIBIDO lanzar el motor directamente. Siempre `./tools/motor_silencioso.sh <rol> ...`
@@ -45,6 +47,8 @@
 - `motor_silencioso.sh` guarda la salida entera en `.motor_logs/` y solo enseña un resumen (≤25 líneas, errores por dueño).
   Sale con el código del motor, o con 65 si el motor dio 0 pero hay errores en el log. No vuelques el log entero al
   contexto: usa `grep`/`tail` sobre él (`MOTOR_SALIDA=completa` es para personas).
+- Si el motor crea o cambia archivos versionables, el resumen los lista por dueño (pueden ser de otra sesión que trabajaba
+  a la vez). Los tuyos van en tu entrega; los ajenos, ver §4. No cambia el código de salida.
 - Un error que crees ruido no se esquiva: se pide por tablón a `auditor-calidad`, único que lo silencia
   (`tools/auditoria/ruido_motor.txt`, con su motivo). Un error en archivos de otro dueño se le avisa por tablón.
 - Prohibido reproducir sonido o abrir enlaces de audio/vídeo.

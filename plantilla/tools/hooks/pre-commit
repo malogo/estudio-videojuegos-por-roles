@@ -41,8 +41,9 @@ if (( ! ES_MERGE )); then
     while IFS= read -r FILA; do es_fila "$FILA" && HAY_FILA=1; done <<< "$FILAS_NUBE"
     if (( ! HAY_FILA )); then
         echo "[ERROR PRE-COMMIT] La fila de '$TABLON' debe ir en el mismo commit que tu entrega." >&2
-        echo "Añade tu fila con la hora de 'date \"+%Y-%m-%d %H:%M\"' y ejecuta: git commit -m \"...\" -- <tus_rutas> $TABLON" >&2
-        echo "Desde la nube, la fila va en '$ENTREGAS/<lote>.txt' (mismo formato) en lugar del tablón." >&2
+        echo "Entrega con una sola orden (añade la fila con la hora real y commitea todo junto):" >&2
+        echo "  ./tools/hooks/entregar.sh <rol> \"<qué>\" \"<ruta o commit>\" <destino> -- <tus_rutas>" >&2
+        echo "Desde la nube, añade --nube <lote>: la fila va a '$ENTREGAS/<lote>.txt' en lugar del tablón." >&2
         exit 1
     fi
 fi
@@ -54,7 +55,7 @@ for ARCHIVO in "$TABLON" "${TXT_ENTREGAS[@]}"; do
     git cat-file -e ":$ARCHIVO" 2>/dev/null || continue
     if [[ "$(git show ":$ARCHIVO" | wc -c)" != "$(git show ":$ARCHIVO" | tr -d '\000' | wc -c)" ]]; then
         echo "[ERROR PRE-COMMIT] '$ARCHIVO' contiene bytes nulos (¿escrito con '>>' desde PowerShell 5.1, que usa UTF-16?)." >&2
-        echo "Añade las filas siempre desde Git Bash: echo \"\$(date '+%Y-%m-%d %H:%M') | ...\" >> $ARCHIVO" >&2
+        echo "Añade las filas siempre con ./tools/hooks/entregar.sh (desde Git Bash)." >&2
         exit 1
     fi
 done
@@ -79,7 +80,7 @@ while IFS= read -r FILA; do
     MARCA_ZONA=0
     (( HAY_ZONA )) && MARCA_ZONA=$(TZ="$ZONA" date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo 0)
     if (( (MARCA < AHORA - 5400 || MARCA > AHORA + 300) && (MARCA_ZONA < AHORA - 5400 || MARCA_ZONA > AHORA + 300) )); then
-        echo "[ERROR PRE-COMMIT] La fila del tablón no lleva una hora real (${BASH_REMATCH[1]}). Usa 'date \"+%Y-%m-%d %H:%M\"'." >&2
+        echo "[ERROR PRE-COMMIT] La fila del tablón no lleva una hora real (${BASH_REMATCH[1]}). Entrega con ./tools/hooks/entregar.sh, que la pone sola." >&2
         exit 1
     fi
 done < <(printf '%s\n%s\n' "$FILAS_TABLON" "$FILAS_NUBE")

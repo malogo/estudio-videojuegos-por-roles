@@ -9,10 +9,13 @@
 #                  <raiz>/tools/auditoria/excepciones_proceso.txt; puede no existir)
 #
 # Revisa:
-# 1. Filas del tablón con formato "YYYY-MM-DD HH:MM | origen | qué | ruta | destino" y roles válidos.
+# 1. Filas del tablón con formato "YYYY-MM-DD HH:MM | origen | qué | ruta | destino" y roles válidos; más de 200 filas
+#    (toca archivarlo con tools/hooks/archivar_tablon.sh).
 # 2. Commits de las últimas 24 h que tocan rutas de otro dueño (según docs/direccion/roles/<rol>.md),
 #    salvo los listados en el archivo de excepciones.
-# 3. Candados tools/locks/*.lock huérfanos (PID inexistente).
+# 3. Candados tools/locks/*.lock: huérfanos (modo pid: ni el envoltorio ni el comando siguen vivos), probables
+#    huérfanos (PID vivo sin poder saber si es el dueño), ocupados más de CANDADO_MAX_HORAS (6) y restos de un
+#    reclamo interrumpido. En modo flock un archivo con datos viejos no es hallazgo: solo cuenta si está cogido.
 # 4. Lotes del plan nocturno cuyo estado no coincide con el tablón.
 # 5. Entradas de pendientes_manana.md abiertas hace más de 3 días.
 # Sale con 0 si no hay hallazgos, 1 si los hay y 2 si no puede auditar.
@@ -72,10 +75,11 @@ es_destino() { local d; es_rol "$1" && return 0; for d in "${DESTINOS_EXTRA[@]}"
 leer() { tr -d '\r' < "$1"; }
 
 # --- 1. Formato del tablón -------------------------------------------------------------
-N=0
+N=0 N_FILAS=0
 while IFS= read -r LINEA; do
     N=$((N + 1))
     [[ -z "${LINEA// /}" || "$LINEA" == \#* ]] && continue
+    N_FILAS=$((N_FILAS + 1))
     if [[ ! "$LINEA" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2})\ \|\ ([^|]+)\ \|\ ([^|]+)\ \|\ ([^|]+)\ \|\ ([^|]+)$ ]]; then
         anotar 1 "línea $N: formato incorrecto → \`${LINEA:0:120}\`"
         continue
@@ -85,6 +89,7 @@ while IFS= read -r LINEA; do
     es_rol "$ORIGEN" || anotar 1 "línea $N: origen no es un rol válido \`$ORIGEN\`"
     es_destino "$DESTINO" || anotar 1 "línea $N: destino no es un rol válido \`$DESTINO\`"
 done < <(leer "$TABLON")
+(( N_FILAS > 200 )) && anotar 1 "el tablón tiene $N_FILAS filas (>200): coordinador debe archivarlo con \`./tools/hooks/archivar_tablon.sh coordinador\`"
 
 # --- 2. Commits fuera de dueño (últimas 24 h) ------------------------------------------
 # Patrones de cada rol: rutas entre comillas invertidas de la sección "Dueño Exclusivo" de su ficha.
@@ -145,16 +150,32 @@ else
     anotar 2 "\`$RAIZ\` no es un repositorio git; no se pueden revisar commits"
 fi
 
-# --- 3. Candados huérfanos -------------------------------------------------------------
+# --- 3. Candados -------------------------------------------------------------------------
+# El estado lo da el propio with_lock.sh --estado (misma lógica que al adquirir): "estado|rol|pid|comando|edad_s|modo".
+MAX_H="${CANDADO_MAX_HORAS:-6}"
 for LOCK in "$RAIZ"/tools/locks/*.lock; do
     [[ -e "$LOCK" ]] || continue
-    PID="$(tr -d '\r' < "$LOCK" | head -n1 | cut -d: -f2)"
     REL="${LOCK#"$RAIZ"/}"
-    if [[ ! "$PID" =~ ^[0-9]+$ ]]; then
-        anotar 3 "\`$REL\` sin PID legible (contenido: \`$(head -c 60 "$LOCK" | tr -d '\r\n')\`)"
-    elif ! kill -0 "$PID" 2>/dev/null && [[ ! -e "/proc/$PID" ]]; then
-        anotar 3 "\`$REL\` huérfano: el PID $PID no existe"
+    NOMBRE="$(basename "$LOCK" .lock)"
+    if [[ "$NOMBRE" == *.* ]]; then
+        # <candado>.huerfano.<pid>.lock o <candado>.escribiendo.<pid>.lock: si su PID ya no vive, es un resto
+        P="${NOMBRE##*.}"
+        if [[ ! "$P" =~ ^[0-9]+$ ]] || ! kill -0 "$P" 2>/dev/null; then
+            anotar 3 "\`$REL\` es un resto de una sesión interrumpida; se puede borrar"
+        fi
+        continue
     fi
+    IFS='|' read -r EST L_ROL L_PID L_HIJO L_EDAD L_MODO < <("$RAIZ/tools/locks/with_lock.sh" --estado "$NOMBRE" 2>/dev/null || echo "error")
+    QUIEN="\`${L_ROL:-?}\` (PID ${L_PID:-?}${L_HIJO:+, comando $L_HIJO})"
+    case "$EST" in
+        libre) ;;
+        huerfano) anotar 3 "\`$REL\` huérfano ($L_MODO): $QUIEN ya no existe" ;;
+        dudoso) anotar 3 "\`$REL\` probable huérfano ($L_MODO): $QUIEN sigue vivo pero no se sabe si es el dueño" ;;
+        ocupado)
+            [[ "$L_EDAD" =~ ^[0-9]+$ ]] && (( L_EDAD > MAX_H * 3600 )) \
+                && anotar 3 "\`$REL\` ocupado por $QUIEN desde hace $(( L_EDAD / 3600 )) h (más de $MAX_H h)" ;;
+        *) anotar 3 "\`$REL\` ilegible (contenido: \`$(head -c 60 "$LOCK" | tr -d '\r\n')\`)" ;;
+    esac
 done
 
 # --- 4. Plan nocturno frente al tablón ---------------------------------------------------
@@ -207,9 +228,9 @@ cerrar_entrada
 
 # --- Informe -----------------------------------------------------------------------------
 TITULOS=(""
-    "1. Formato del tablón"
+    "1. Formato y tamaño del tablón"
     "2. Commits fuera de dueño (últimas 24 h)"
-    "3. Candados huérfanos"
+    "3. Candados huérfanos u ocupados demasiado tiempo"
     "4. Plan nocturno frente al tablón"
     "5. Pendientes abiertos más de 3 días")
 mkdir -p "$(dirname "$INFORME")"

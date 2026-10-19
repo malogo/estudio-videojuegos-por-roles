@@ -1,0 +1,48 @@
+# Despliega la plantilla con los valores de ejemplo de Godot y de Unity y pasa las pruebas de las guardas
+# (tools/hooks/tests/prueba_guardas.sh, con motor falso: no hace falta ningún motor) y shellcheck.
+# Evita regresiones de la plantilla. Tarda alrededor de un minuto por motor.
+name: Prueba de la plantilla
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  prueba:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        motor: [godot, unity]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Desplegar la plantilla (${{ matrix.motor }})
+        run: |
+          D="$RUNNER_TEMP/despliegue"
+          mkdir -p "$D"
+          python3 rellenar_plantilla.py --valores "ejemplo_valores_${{ matrix.motor }}_pc.json" --destino "$D"
+          cd "$D"
+          git init -q -b main .
+          git config user.name prueba && git config user.email prueba@example.invalid
+          git add -- CLAUDE.md .gitignore .claude docs tools
+          git commit -q -m "coordinador: despliegue"
+          echo "DESPLIEGUE=$D" >> "$GITHUB_ENV"
+
+      - name: Sin marcadores sin rellenar (salvo {{COMPLETAR}} de roles extra)
+        working-directory: ${{ env.DESPLIEGUE }}
+        run: |
+          if grep -rn "{{" CLAUDE.md docs tools .claude | grep -v "{{COMPLETAR[:}]"; then
+            echo "::error::Quedan marcadores sin rellenar"; exit 1
+          fi
+
+      - name: Pruebas de las guardas
+        working-directory: ${{ env.DESPLIEGUE }}
+        run: ./tools/hooks/tests/prueba_guardas.sh
+
+      - name: shellcheck
+        working-directory: ${{ env.DESPLIEGUE }}
+        run: shellcheck -x -S warning $(find tools -name '*.sh') tools/hooks/pre-commit tools/hooks/commit-msg

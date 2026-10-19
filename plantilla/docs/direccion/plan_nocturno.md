@@ -5,7 +5,7 @@
 - Solo se trabaja en lotes ya decididos aquí; nada de alcance nuevo (eso va a `pendientes_manana.md`).
 - Máximo de sesiones simultáneas: {{MAX_SESIONES}}, y nunca dos sobre la misma tanda o el mismo candado.
 - Si un candado está ocupado (código 75), el rol pasa al siguiente lote de su cola.
-- Cada lote termina con commit por rutas + entrada en el tablón hacia `auditor-calidad`.
+- Cada lote termina con `./tools/hooks/entregar.sh` (commit por rutas + entrada en el tablón) hacia `auditor-calidad`.
 - Si se agota la cuota: el coordinador declara la pausa en el tablón (qué sigue, qué espera).
 - Una ronda no empieza hasta que sus dependencias (columna Lote, "tras X") están commiteadas.
 

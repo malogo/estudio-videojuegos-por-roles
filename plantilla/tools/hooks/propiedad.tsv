@@ -18,6 +18,7 @@ docs/direccion/especificaciones.md	coordinador
 docs/direccion/plan_nocturno.md	coordinador
 docs/direccion/pendientes_manana.md	coordinador
 docs/direccion/roles/*.md	coordinador
+docs/direccion/archivo/**	coordinador
 
 # arquitecto-sistemas (código base, configuración del motor y del repositorio, hooks)
 {{CONFIG_MOTOR}}	arquitecto-sistemas

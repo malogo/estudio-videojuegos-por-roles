@@ -9,6 +9,10 @@
 
 ## 3. Arquitectura Técnica
 - (Módulos, datos, red/backend si lo hay, herramientas.)
+- Contratos entre roles: cada sistema que usa otro rol publica antes su contrato (señales/eventos, datos y quién los
+  emite) y se avisa por tablón; la interfaz se prueba con datos simulados. Lo publica `arquitecto-sistemas`; el
+  mecanismo (bus de eventos, señales del motor, interfaces) es decisión del proyecto.
+- (Contratos vigentes: sistema → señales/eventos y datos → rol que los consume.)
 
 ## 4. Estructura de Carpetas por Dueño
 - Ver `tools/hooks/propiedad.tsv` (fuente única) y las fichas de `docs/direccion/roles/`.

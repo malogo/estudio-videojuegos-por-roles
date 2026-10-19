@@ -23,12 +23,13 @@ marcadores `{{ASI}}` de `plantilla/`. Una clave con lista repite la línea por e
 | B2 | ¿Lenguaje principal? | GDScript, C#, C++, Blueprints + C++, TypeScript… | según motor | `LENGUAJE` · ficha de arquitecto-sistemas |
 | B3 | ¿Cómo se llama el ejecutable del motor en la terminal? | `godot`, `Unity`, `UnrealEditor-Cmd`… | según motor | `BINARIO_MOTOR` · tools/motor_silencioso.sh |
 | B4 | Patrón para reconocer el ejecutable (para prohibir lanzarlo a pelo) | Godot `^godot(4\|[._-]v?[0-9].*)?(\.exe)?$\|^godot_v[0-9]` · Unity `^unity(\.exe)?$` · Unreal `^unrealeditor(-cmd)?(\.exe)?$` · sin motor `^$` | según motor | `REGEX_BINARIO_MOTOR` · tools/hooks/reglas_comando.sh |
-| B5 | Argumentos que lo lanzan sin sonido ni ventana | Godot `--audio-driver Dummy` (y `--headless` al llamarlo) · Unity `-batchmode -nographics` · Unreal `-nosound -unattended -nullrhi` | según motor | `ARGS_MOTOR_SILENCIOSO` · tools/motor_silencioso.sh |
+| B5 | Argumentos que lo lanzan sin sonido ni ventana | Godot `--audio-driver Dummy` (y `--headless` al llamarlo) · Unity `-batchmode -nographics -logFile -` (`-logFile -` saca el log por la salida para poder revisarlo) · Unreal `-nosound -unattended -nullrhi` | según motor | `ARGS_MOTOR_SILENCIOSO` · tools/motor_silencioso.sh |
 | B6 | Opción que indica la carpeta del proyecto | Godot `--path` · Unity `-projectPath` · Unreal: vacío (el `.uproject` va como primer argumento) | según motor | `ARG_RUTA_PROYECTO` · tools/motor_silencioso.sh |
 | B7 | Archivos de configuración del motor (los cuida arquitecto-sistemas) | Godot `project.godot`, `export_presets.cfg` · Unity `ProjectSettings/**`, `Packages/manifest.json` · Unreal `Config/**`, `*.uproject` | según motor | `CONFIG_MOTOR` (lista) · propiedad.tsv, ficha de arquitecto |
 | B8 | Qué genera el motor y no se commitea | Godot `.godot/` · Unity `Library/`, `Temp/`, `Obj/`, `Build/`, `Logs/`, `UserSettings/` · Unreal `Binaries/`, `Intermediate/`, `Saved/`, `DerivedDataCache/` | según motor | `IGNORAR_MOTOR` (lista) · .gitignore |
 | B9 | Guía oficial de buenas prácticas del motor | URL | la del motor | `GUIA_BUENAS_PRACTICAS` · normas §5 |
 | B10 | ¿Cómo se hace una build y cómo se llama su candado? | comando + nombre corto (`build_pc`, `android_build`…) | `build` | `CANDADO_BUILD`, `COMANDO_BUILD_EJEMPLO` · normas §5, with_lock.sh |
+| B11 | Patrón (ERE) de las líneas de error en la salida del motor (el motor puede salir con 0 aunque haya errores) | Godot `^(USER )?(SCRIPT )?ERROR:` · Unity `error CS[0-9]+\|Scripts have compiler errors\|Exception:` · Unreal `Error:` · sin motor: vacío | según motor | `REGEX_ERRORES_MOTOR` · tools/motor_silencioso.sh (el ruido benigno lo silencia auditor-calidad en `tools/auditoria/ruido_motor.txt`) |
 
 ## Bloque C — Equipo y carpetas
 

@@ -10,7 +10,8 @@
 
 ## Recordatorios críticos
 - Solo editas archivos de los que tu rol es dueño (`tools/hooks/propiedad.tsv`).
-- El motor ({{MOTOR}}) solo con `./tools/motor_silencioso.sh <rol> ...`. Nunca con sonido.
+- El motor ({{MOTOR}}) solo con `./tools/motor_silencioso.sh <rol> ...`. Nunca con sonido. Da un resumen corto y sale con 0
+  solo si no hay errores (65 = el motor acabó bien pero hay errores en el log).
 - Commits solo por rutas. Prohibido `git stash`, `git add -A`, `git commit -a`.
 - Subagentes: solo `agente-ejecutor-lote`, `agente-ejecutor-mecanico` y `agente-buscador-lectura` (`.claude/agents/`),
   con `docs/direccion/roles/plantilla_encargo.md`. En este proyecto sus normas sobre subagentes mandan sobre el `CLAUDE.md` global del usuario.

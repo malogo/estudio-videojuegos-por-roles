@@ -160,5 +160,38 @@ for MODO in pid flock; do
 done
 unset CANDADO_MODO
 
+echo "== Motor (motor_silencioso.sh con tools/hooks/tests/motor_falso.sh)"
+export MOTOR_BIN="$R/tools/hooks/tests/motor_falso.sh"
+MS=./tools/motor_silencioso.sh
+espera_codigo "patrón de errores del despliegue válido; sin errores -> 0" 0 "Resultado: 0" \
+    env MOTOR_FALSO_TEXTO="todo bien" $MS auditor-calidad
+if grep -q "AVISO" "$TMP/salida"; then mal "el patrón de errores del despliegue da aviso"; fi
+export MOTOR_REGEX_ERRORES='^(USER )?(SCRIPT )?ERROR:'
+ERRORES_GODOT='SCRIPT ERROR: Parse Error: Identifier "x" not declared in the current scope.
+   at: GDScript::reload (res://tools/motor_silencioso.sh:3)
+ERROR: Failed loading resource: docs/direccion/plan_nocturno.md.'
+espera_codigo "SCRIPT ERROR con el motor en 0 -> 65" 65 "Resultado: 65" env MOTOR_FALSO_TEXTO="$ERRORES_GODOT" $MS auditor-calidad
+if grep -q "arquitecto-sistemas: 1 · tools/motor_silencioso.sh" "$TMP/salida" \
+    && grep -q "coordinador: 1 · docs/direccion/plan_nocturno.md" "$TMP/salida"; then
+    ok "... atribuido a arquitecto-sistemas (res://, en la línea at:) y a coordinador (ruta relativa)"
+else mal "errores mal atribuidos a su dueño"; fi
+cp tools/auditoria/ruido_motor.txt "$TMP/ruido"
+printf '^SCRIPT ERROR: Parse Error\tprueba\n^ERROR: Failed loading resource: docs/\tprueba\n' >> tools/auditoria/ruido_motor.txt
+espera_codigo "mismos errores listados en ruido_motor.txt -> 0" 0 "2 silenciados" env MOTOR_FALSO_TEXTO="$ERRORES_GODOT" $MS auditor-calidad
+cp "$TMP/ruido" tools/auditoria/ruido_motor.txt
+espera_codigo "motor que sale con 2 -> 2" 2 "Resultado: 2" env MOTOR_FALSO_CODIGO=2 $MS auditor-calidad
+espera_codigo "5.000 líneas de error -> 65 con resumen corto" 65 "15 primeros de 5000" env MOTOR_FALSO_LINEAS=5000 $MS auditor-calidad
+if (( $(wc -l < "$TMP/salida") <= 25 )); then ok "... y el resumen cabe en 25 líneas ($(wc -l < "$TMP/salida" | tr -d ' '))"
+else mal "el resumen pasa de 25 líneas"; fi
+$CL motor arquitecto-sistemas sleep 1 & W=$!
+pid_comando motor >/dev/null
+espera_codigo "candado del motor ocupado -> 75" 75 "LOCK OCUPADO" $MS auditor-calidad
+wait "$W"
+for i in $(seq 40); do : > ".motor_logs/2000-01-01_0000$(printf '%02d' "$i")_viejo.log"; done
+$MS auditor-calidad >/dev/null 2>&1
+N_LOGS=$(find .motor_logs -name '*.log' | wc -l | tr -d ' ')
+if (( N_LOGS == 30 )); then ok "se guardan los 30 últimos logs"; else : > "$TMP/salida"; mal "se guardan $N_LOGS logs (se esperaban 30)"; fi
+unset MOTOR_BIN MOTOR_REGEX_ERRORES
+
 echo "== Resultado: $((TOTAL - FALLOS))/$TOTAL pruebas OK"
 (( FALLOS == 0 ))

@@ -9,7 +9,7 @@
 2. Archivos exactos: <rutas, una por línea; solo del rol de origen>
 3. Cambio pedido: <qué cambiar; en agente-ejecutor-mecanico, con el patrón a aplicar>
 4. Criterio de hecho: <condición comprobable>
-5. Comando de comprobación: <comando exacto; el motor solo con ./tools/motor_silencioso.sh <rol> ...>
+5. Comando de comprobación: <comando exacto; el motor solo con ./tools/motor_silencioso.sh <rol> ... (hecho = sale con 0)>
 6. Tope de informe: 10 líneas
 Agente: <agente-ejecutor-lote (high, código que exige diseño) | agente-ejecutor-mecanico (medium, patrón dado)>
 Esfuerzo: <high | medium> (el fijado en el agente elegido)

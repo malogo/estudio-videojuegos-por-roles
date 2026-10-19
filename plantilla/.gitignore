@@ -1,6 +1,8 @@
 # Candados (archivos de flock o de PID; ver tools/locks/with_lock.sh) y estado temporal de contexto (nunca se commitean)
 tools/locks/*.lock
 .claude_context_tokens
+# Salida completa del motor (tools/motor_silencioso.sh guarda los 30 últimos logs)
+.motor_logs/
 
 # Generado por el motor ({{MOTOR}})
 {{IGNORAR_MOTOR}}

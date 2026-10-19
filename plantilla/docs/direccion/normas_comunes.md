@@ -39,6 +39,11 @@
 - Builds: `./tools/locks/with_lock.sh {{CANDADO_BUILD}} <rol> <comando>`.
 - Si el candado está ocupado (código 75): no reintentes en bucle; sigue con otra tarea y vuelve después.
   Si avisa de «probable huérfano», comprueba el PID con la orden que da y, si no es el motor ni una build, libéralo como indica.
+- `motor_silencioso.sh` guarda la salida entera en `.motor_logs/` y solo enseña un resumen (≤25 líneas, errores por dueño).
+  Sale con el código del motor, o con 65 si el motor dio 0 pero hay errores en el log. No vuelques el log entero al
+  contexto: usa `grep`/`tail` sobre él (`MOTOR_SALIDA=completa` es para personas).
+- Un error que crees ruido no se esquiva: se pide por tablón a `auditor-calidad`, único que lo silencia
+  (`tools/auditoria/ruido_motor.txt`, con su motivo). Un error en archivos de otro dueño se le avisa por tablón.
 - Prohibido reproducir sonido o abrir enlaces de audio/vídeo.
 - Nunca commitees cachés del motor ni `tools/locks/*.lock`. Ningún audio o vídeo arranca solo al cargar una escena.
 - Buenas prácticas: se sigue la guía oficial del motor ({{GUIA_BUENAS_PRACTICAS}}). Desviarse se justifica en el commit.
@@ -63,7 +68,7 @@
 - `coordinador` nunca se vacía por su cuenta: avisa cuando conviene, deja al día `memoria_coordinador.md` y lo vacía la persona responsable.
 
 ## 8. Calidad antes de entregar
-- Toda escena o pantalla tocada debe arrancar limpia en modo sin interfaz y llevar captura antes de entregarse.
+- Toda escena o pantalla tocada debe arrancar limpia (`./tools/motor_silencioso.sh <rol> ...` sale con 0) y llevar captura antes de entregarse.
 - Toda pieza visual se valida lado a lado con `docs/arte/referencia_estilo.md` y dentro del conjunto, nunca aislada.
 - Nada llega a la persona responsable sin pasar por `auditor-calidad`.
 - Un fallo visual o de flujo que se repite se convierte en un detector automático en las rutas de tests.

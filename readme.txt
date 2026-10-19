@@ -70,7 +70,7 @@ Candado .......... impide que dos sesiones usen el motor o hagan una build a la 
 4. MAPA DE CARPETAS (lo que crea el despliegue en el proyecto)
 --------------------------------------------------------------
 CLAUDE.md                          Lo primero que lee cada sesión: cómo arrancar con su rol.
-.gitignore                         Archivos que nunca se guardan (cachés del motor, candados).
+.gitignore                         Archivos que nunca se guardan (cachés y logs del motor, candados).
 .claude/settings.json              Activa los hooks y prohíbe los subagentes genéricos.
 .claude/agents/                    Los 3 subagentes del proyecto:
    agente-ejecutor-lote.md            código que exige pensar (modelo medio).
@@ -101,9 +101,12 @@ tools/hooks/                       Las guardas:
    volcar_entregas_nube.sh         Pasa al tablón las líneas de la nube.
    git_guard.sh, leer_json.sh      Piezas auxiliares.
    tests/prueba_guardas.sh         Prueba rápida de que todas las guardas funcionan.
+   tests/motor_falso.sh            Motor de mentira para esas pruebas (no hace falta el real).
 tools/locks/with_lock.sh           Los candados.
-tools/motor_silencioso.sh          ÚNICA forma de abrir el motor: sin sonido y con candado.
+tools/motor_silencioso.sh          ÚNICA forma de abrir el motor: sin sonido y con candado. Guarda la
+                                   salida en .motor_logs/ y da un resumen corto con los errores.
 tools/auditoria/auditoria_proceso.sh  Revisión del proceso que hace el auditor.
+tools/auditoria/ruido_motor.txt    Errores del motor que el auditor ha dado por benignos.
 
 
 5. CÓMO SE DESPLIEGA (desde UNA sesión de chat)
@@ -219,13 +222,15 @@ subagentes, propiedad forzada, reglas de git, candados, auditoría de proceso y 
 Cambia según el motor (lo pregunta el cuestionario):
 - Cómo se llama el programa del motor y con qué opciones va sin sonido ni ventana:
     Godot:  godot --audio-driver Dummy --headless
-    Unity:  Unity -batchmode -nographics -projectPath <carpeta>
+    Unity:  Unity -batchmode -nographics -logFile - -projectPath <carpeta>
     Unreal: UnrealEditor-Cmd <proyecto>.uproject -nosound -unattended -nullrhi
 - Qué carpetas son de cada rol y qué archivos genera el motor (que no se guardan).
 - Metadatos que deben ir siempre con su archivo: Godot (.import, .uid), Unity (.meta).
   Hay comprobaciones listas en extras/godot y extras/unity; para otros motores se escribe
   una parecida si hace falta.
 - Cómo se pasan los tests sin ventana.
+- Cómo se reconocen los errores en lo que escribe el motor: muchos motores acaban "bien"
+  aunque haya errores, así que el envoltorio los busca en la salida.
 
 Cambia según la plataforma:
 - Móvil: candado de build (Android/iOS), firma de builds fuera del repositorio.

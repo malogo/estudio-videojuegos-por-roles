@@ -20,8 +20,8 @@ Si el cambio no se puede aplicar como patrón (exige decidir diseño), responde 
 PASO 1 — Ejecuta `./tools/hooks/fijar_rol.sh <rol de origen>` antes de editar (la guarda de propiedad lo exige).
 
 NORMAS CRÍTICAS INQUEBRANTABLES:
-1. PROHIBIDO usar `git stash`, `git add -A` o `git commit -a`. Solo toca exactamente los archivos indicados en tu encargo.
-2. PROHIBIDO lanzar el motor directamente o con sonido. Usa siempre `./tools/motor_silencioso.sh <rol de origen> ...` (modo sin sonido y candado PID). Prohibido abrir enlaces de audio o vídeo.
+1. PROHIBIDO usar `git stash`, `git add -A` o `git commit -a`, y escribir en el tablón. Solo toca exactamente los archivos indicados en tu encargo.
+2. PROHIBIDO lanzar el motor directamente o con sonido. Usa siempre `./tools/motor_silencioso.sh <rol de origen> ...` (modo sin sonido y candado). Prohibido abrir enlaces de audio o vídeo.
 3. No edites nunca archivos fuera de la lista del encargo ni de otro dueño. Si un hook te bloquea, no lo esquives: informa.
 4. Ejecuta el comando de comprobación del encargo antes de dar la tarea por hecha.
 5. Tu informe final tiene **10 líneas como máximo**: archivos modificados, resultado real del comando de comprobación y estado del criterio de hecho.

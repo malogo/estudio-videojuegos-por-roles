@@ -47,6 +47,7 @@ La idea es la de un pequeño estudio:
   archivos ajenos, que no haya candados olvidados...).
 - Motor sin sonido y con candado: el motor del juego solo se abre en modo silencioso y de
   uno en uno (un "candado" impide que dos sesiones lo usen a la vez y estropeen la caché).
+  El candado dura lo que dure el motor, aunque la sesión que lo lanzó se corte a medias.
 - Sesiones en la nube: también se puede encargar trabajo a sesiones de Claude Code en la
   web. Trabajan en su propia rama, abren una propuesta de cambio (PR) y dejan su línea del
   tablón en un archivo aparte; al aceptarla, el coordinador la pasa al tablón.
@@ -69,7 +70,7 @@ Candado .......... impide que dos sesiones usen el motor o hagan una build a la 
 4. MAPA DE CARPETAS (lo que crea el despliegue en el proyecto)
 --------------------------------------------------------------
 CLAUDE.md                          Lo primero que lee cada sesión: cómo arrancar con su rol.
-.gitignore                         Archivos que nunca se guardan (cachés del motor, candados).
+.gitignore                         Archivos que nunca se guardan (cachés y logs del motor, candados).
 .claude/settings.json              Activa los hooks y prohíbe los subagentes genéricos.
 .claude/agents/                    Los 3 subagentes del proyecto:
    agente-ejecutor-lote.md            código que exige pensar (modelo medio).
@@ -82,6 +83,7 @@ docs/direccion/
    plan_nocturno.md                Los lotes de la ronda.
    pendientes_manana.md            Las dudas para la persona responsable.
    entregas_nube/                  Líneas del tablón que dejan las sesiones en la nube.
+   archivo/                        Líneas viejas del tablón, archivadas por el coordinador.
    roles/<rol>.md                  Una ficha por rol.
    roles/memoria_<rol>.md          Una memoria por rol.
    roles/plantilla_encargo.md      Ficha de encargo a subagentes.
@@ -94,15 +96,22 @@ tools/hooks/                       Las guardas:
    pre_tool_guard.sh               Bloquea órdenes prohibidas antes de ejecutarlas.
    guard_propiedad.sh              Bloquea editar archivos de otro rol.
    reglas_comando.sh               Las reglas de órdenes prohibidas (git y motor).
+   entregar.sh                     Entrega en una orden: línea del tablón con hora real + guardado.
    pre-commit                      Al guardar: exige la línea del tablón y que tenga hora real.
-   commit-msg                      Al guardar: exige "<rol>: ..." y que todo sea de ese rol.
+   commit-msg                      Al guardar: exige "<rol>: ..." y que todo sea de ese rol (también
+                                   las líneas del tablón: nadie guarda la línea de otro).
    pre-commit-motor.sh             (opcional) comprobaciones propias del motor.
    volcar_entregas_nube.sh         Pasa al tablón las líneas de la nube.
+   archivar_tablon.sh              El coordinador archiva las líneas viejas del tablón (ya leídas por todos).
    git_guard.sh, leer_json.sh      Piezas auxiliares.
    tests/prueba_guardas.sh         Prueba rápida de que todas las guardas funcionan.
+   tests/motor_falso.sh            Motor de mentira para esas pruebas (no hace falta el real).
 tools/locks/with_lock.sh           Los candados.
-tools/motor_silencioso.sh          ÚNICA forma de abrir el motor: sin sonido y con candado.
+tools/motor_silencioso.sh          ÚNICA forma de abrir el motor: sin sonido y con candado. Guarda la
+                                   salida en .motor_logs/ y da un resumen corto con los errores y los
+                                   archivos que el motor ha creado o cambiado (por dueño).
 tools/auditoria/auditoria_proceso.sh  Revisión del proceso que hace el auditor.
+tools/auditoria/ruido_motor.txt    Errores del motor que el auditor ha dado por benignos.
 
 
 5. CÓMO SE DESPLIEGA (desde UNA sesión de chat)
@@ -143,13 +152,14 @@ tú copies nada. En una terminal funciona igual, pero los avisos los escribes t�
 
 6.2 El ciclo de un lote (lo que pasa cada vez)
   1. Pides al coordinador: "lanza la ronda N" (o "encarga X a <rol>").
-  2. El coordinador escribe la línea en el tablón dirigida a ese rol y le manda a su
+  2. El coordinador escribe la línea en el tablón dirigida a ese rol (con entregar.sh) y le manda a su
      ventana el aviso "Tienes trabajo en el tablón". (Si la ventana se limpió antes, ver
      6.3: el aviso debe llevar también el rol.) En la terminal, ese aviso lo pegas tú.
      La primera vez, la app puede pedirte en la ventana de destino que aceptes el mensaje.
-  3. El especialista trabaja: hace el lote, pasa sus pruebas, guarda (commit) solo sus
-     archivos y deja en el tablón su línea de entrega dirigida al siguiente (auditor o
-     coordinador).
+  3. El especialista trabaja: hace el lote, pasa sus pruebas y lo entrega con una sola
+     orden (./tools/hooks/entregar.sh): guarda (commit) solo sus archivos junto con su línea
+     del tablón, con la hora real, dirigida al siguiente (auditor o coordinador). Nadie
+     escribe el tablón a mano, así una sesión nunca se lleva la línea de otra.
   4. Si la entrega va al auditor, el coordinador lo despierta igual; el auditor prueba y
      acepta o devuelve el lote al dueño. Nada te llega sin pasar por él.
   5. Al acabar, el especialista actualiza su memoria (qué hizo, qué descartó, dónde se
@@ -209,6 +219,16 @@ tú copies nada. En una terminal funciona igual, pero los avisos los escribes t�
     coordinador. Él revisa el PR y, solo si se lo pides, lo fusiona y pasa al tablón la
     línea que dejó la nube (volcar_entregas_nube.sh).
 
+6.9 Más de dos sesiones a la vez: modo worktree (opcional)
+  - Por defecto todas las ventanas comparten la misma carpeta y la misma rama. Con más de
+    2 sesiones trabajando a la vez, cada una puede ir en su propia carpeta y rama con
+    "git worktree add ../juego-<rol> -b <rol>/<lote>" y entregar como la nube: con
+    --nube <lote> (la línea va a entregas_nube/) y el coordinador fusiona y vuelca.
+  - Los hooks ya funcionan en worktrees y los candados quedan por carpeta, que es lo
+    correcto: cada worktree tiene su propia caché del motor.
+  - Coste: una caché por worktree (Godot reimporta; en Unity, regenerar Library/ puede
+    llevar mucho tiempo y espacio) y más fusiones. Por eso no es el modo por defecto.
+
 
 7. QUÉ CAMBIA SEGÚN PLATAFORMA Y MOTOR, Y QUÉ ES COMÚN
 ------------------------------------------------------
@@ -218,13 +238,15 @@ subagentes, propiedad forzada, reglas de git, candados, auditoría de proceso y 
 Cambia según el motor (lo pregunta el cuestionario):
 - Cómo se llama el programa del motor y con qué opciones va sin sonido ni ventana:
     Godot:  godot --audio-driver Dummy --headless
-    Unity:  Unity -batchmode -nographics -projectPath <carpeta>
+    Unity:  Unity -batchmode -nographics -logFile - -projectPath <carpeta>
     Unreal: UnrealEditor-Cmd <proyecto>.uproject -nosound -unattended -nullrhi
 - Qué carpetas son de cada rol y qué archivos genera el motor (que no se guardan).
 - Metadatos que deben ir siempre con su archivo: Godot (.import, .uid), Unity (.meta).
   Hay comprobaciones listas en extras/godot y extras/unity; para otros motores se escribe
   una parecida si hace falta.
 - Cómo se pasan los tests sin ventana.
+- Cómo se reconocen los errores en lo que escribe el motor: muchos motores acaban "bien"
+  aunque haya errores, así que el envoltorio los busca en la salida.
 
 Cambia según la plataforma:
 - Móvil: candado de build (Android/iOS), firma de builds fuera del repositorio.
@@ -240,6 +262,12 @@ Cambia según la plataforma:
 - La guarda de edición no ve lo que se escribe con órdenes de terminal (copiar, redirigir);
   eso lo para el hook commit-msg al guardar.
 - El rol lo declara la propia sesión: el sistema evita despistes, no engaños deliberados.
+- Con más de 2 sesiones a la vez, el árbol compartido se vuelve estrecho: ver 6.9 (worktrees).
+- Candados: con la orden "flock" (Linux) los da el sistema operativo y se sueltan solos. Sin
+  ella (Git Bash en Windows, macOS sin "brew install flock") se usa un archivo con el PID: si
+  ese PID lo reutiliza otro proceso, en Linux y macOS se detecta por su hora de arranque; en
+  Windows no se puede saber y, pasadas 6 horas (CANDADO_MAX_HORAS), el candado avisa de
+  "probable huérfano" con la orden para liberarlo a mano. Nunca se roba solo.
 - La batería completa de pruebas de las guardas del proyecto original no se trae: era
   específica de aquel proyecto. Se incluye tools/hooks/tests/prueba_guardas.sh, más corta.
 - En Unreal conviene Git LFS para los .uasset; la plantilla no lo configura sola.
@@ -252,5 +280,8 @@ cuestionario.md                Las preguntas del despliegue, con opciones y valo
 desplegar.md                   Los pasos que sigue la sesión de despliegue.
 rellenar_plantilla.py          Copia la plantilla al proyecto y rellena los huecos {{ASI}}.
 ejemplo_valores_unity_pc.json  Ejemplo de respuestas (Unity, PC) en el formato que usa el script.
+ejemplo_valores_godot_pc.json  Lo mismo para Godot (PC).
+actualizar.md                  Cómo llevar una versión nueva de la plantilla a un proyecto ya desplegado.
+.github/workflows/             Prueba automática de la plantilla (despliegue Godot y Unity + pruebas).
 plantilla/                     Todos los archivos genéricos, con huecos {{ASI}}.
 extras/godot, extras/unity     Comprobaciones propias de cada motor.

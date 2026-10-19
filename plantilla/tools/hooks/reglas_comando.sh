@@ -172,6 +172,25 @@ segmentos_orden() { printf '%s' "$1" | LC_ALL=C awk "$_AWK_SEGMENTOS"; }
 
 _es_shell() { [[ "$1" =~ ^(ba|z|da|k)?sh(\.exe)?$ ]]; }
 
+# ¿Alguno de estos tokens escribe en el tablón? Redirecciones (>, >>, >|, 2>, con o sin espacio) y tee.
+_es_tablon() { local p="${1//\\//}"; [[ "${p##*/}" == tablon.md ]]; }
+_escribe_tablon() {
+    local -a t=("$@")
+    local i x dest
+    for (( i = 0; i < ${#t[@]}; i++ )); do
+        x="${t[i]}"
+        [[ "$x" == *'>'* ]] || continue
+        dest="${x##*>}"
+        dest="${dest#|}"
+        [[ -z "$dest" ]] && dest="${t[i+1]:-}"
+        _es_tablon "$dest" && return 0
+    done
+    if [[ "$(_basename_cmd "${t[0]:-}")" == tee ]]; then
+        for x in "${t[@]:1}"; do _es_tablon "$x" && return 0; done
+    fi
+    return 1
+}
+
 # Recibe una línea de órdenes completa (puede llevar &&, ;, |, comillas, heredocs o varias líneas).
 # Revisa también lo que de verdad se ejecuta dentro: bash -c "...", eval ... y heredocs pasados a una shell.
 motivo_bloqueo_linea() {
@@ -198,7 +217,10 @@ motivo_bloqueo_linea() {
         (( k < n )) || continue
         local cmd="${tok[k]}" base
         base="$(_basename_cmd "$cmd")"
-        if [[ "$base" == git || "$base" == git.exe || "$base" == git_guard.sh ]]; then
+        if _escribe_tablon "${tok[@]:k}" || _escribe_tablon "${tok[@]:0:k}"; then
+            echo "Prohibido escribir en el tablón desde la terminal. Usa ./tools/hooks/entregar.sh <rol> \"<qué>\" \"<ruta o commit>\" <destino> [-- <rutas>] (pone la hora real y commitea tu fila con tus rutas)."
+            return 1
+        elif [[ "$base" == git || "$base" == git.exe || "$base" == git_guard.sh ]]; then
             motivo_bloqueo_git "${tok[@]:k+1}" || return 1
         elif _es_motor "$cmd"; then
             echo "Prohibido lanzar el motor directamente. Usa ./tools/motor_silencioso.sh <rol> ... (sin sonido y con candado)."

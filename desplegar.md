@@ -16,7 +16,7 @@ rol: es «la sesión de despliegue». No toques nada del proyecto antes del paso
 - Un bloque cada vez (A, B, C, D, E, F), con el valor por defecto a la vista. Si la persona no sabe: defecto.
 - Si el motor ya está en la carpeta, deduce lo que puedas (versión, carpetas) y pide solo confirmación.
 - Escribe las respuestas en `valores.json` **fuera del proyecto** (p. ej. junto a la plantilla), con el formato de
-  `<PLANTILLA>/ejemplo_valores_unity_pc.json`. Enséñaselo a la persona antes de seguir.
+  `<PLANTILLA>/ejemplo_valores_unity_pc.json` (o `ejemplo_valores_godot_pc.json`). Enséñaselo a la persona antes de seguir.
 
 ## 4. Rellenar la plantilla
 ```bash
@@ -53,17 +53,15 @@ git commit -m "coordinador: despliegue inicial del sistema de trabajo"
 - Activa `core.hooksPath = tools/hooks` y declara el rol `coordinador` para esta sesión.
 
 ## 9. Primera fila del tablón y excepción de auditoría
+Las filas del tablón se añaden siempre con `entregar.sh` (hora real y commit en una orden; a mano está bloqueado):
 ```bash
-echo "$(TZ=<ZONA_HORARIA> date '+%Y-%m-%d %H:%M') | coordinador | Despliegue inicial del sistema; primer lote A1 en el plan | docs/direccion/plan_nocturno.md | arquitecto-sistemas" >> docs/direccion/tablon.md
-git commit -m "coordinador: primera fila del tablón" -- docs/direccion/tablon.md
+./tools/hooks/entregar.sh coordinador "Despliegue inicial del sistema; primer lote A1 en el plan" docs/direccion/plan_nocturno.md arquitecto-sistemas
 ```
 El commit inicial toca archivos de todos los roles, así que la auditoría lo marcaría. Se exceptúa con el rol del auditor:
 ```bash
 ./tools/hooks/fijar_rol.sh auditor-calidad
 printf '# Commits que la comprobación 2 no revisa (hash y motivo)\n%s despliegue inicial\n' "$(git rev-list --max-parents=0 HEAD)" > tools/auditoria/excepciones_proceso.txt
-git add -- tools/auditoria/excepciones_proceso.txt
-echo "$(TZ=<ZONA_HORARIA> date '+%Y-%m-%d %H:%M') | auditor-calidad | Excepción del commit de despliegue | tools/auditoria/excepciones_proceso.txt | coordinador" >> docs/direccion/tablon.md
-git commit -m "auditor-calidad: excepción del despliegue" -- tools/auditoria/excepciones_proceso.txt docs/direccion/tablon.md
+./tools/hooks/entregar.sh auditor-calidad "Excepción del commit de despliegue" tools/auditoria/excepciones_proceso.txt coordinador -- tools/auditoria/excepciones_proceso.txt
 ./tools/hooks/fijar_rol.sh coordinador
 ```
 (Proyecto que ya existía: añade también al archivo de excepciones los commits anteriores de las últimas 24 h.)

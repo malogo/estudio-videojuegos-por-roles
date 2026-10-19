@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Escribe <archivo.gd>.uid sin abrir Godot (p. ej. en la nube). Con Godot a mano es mejor importar:
-#   ./tools/run_godot_silent.sh <rol> --headless --import
+#   ./tools/motor_silencioso.sh <rol> --headless --import
 # Uso: ./tools/hooks/nuevo_uid.sh <archivo.gd> [...]
 # Formato de Godot 4.4+ (core/io/resource_uid.cpp de 4.7.2-stable): id aleatorio de 63 bits
 # (id & 0x7FFFFFFFFFFFFFFF) escrito en base 34 con las cifras "a".."y" y "0".."8", la más significativa

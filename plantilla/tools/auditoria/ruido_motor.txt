@@ -1,0 +1,7 @@
+# Ruido conocido del motor (DUEÑO: auditor-calidad). Lo usa tools/motor_silencioso.sh.
+# Cada línea: <patrón ERE><TAB><motivo>. Una línea de error del motor que casa con algún patrón no cuenta como
+# error (no da el código 65 ni sale en el resumen; el resumen dice cuántas se silenciaron).
+# Solo se silencia lo que se ha comprobado que es benigno, con su motivo y, si se puede, su fecha y su lote.
+# El rol que produce el error no lo silencia: lo pide por tablón a auditor-calidad.
+# Ejemplo (sin el "# " del principio):
+# ^ERROR: Condition "!is_inside_tree\(\)" is true\.	benigno al importar sin escena; comprobado en el lote A3

@@ -39,20 +39,13 @@ mostrar() {  # mostrar <título> <ruta relativa>
 mostrar Ficha "$FICHA"
 mostrar Memoria "$MEMORIA"
 
-# "**Último vaciado:** 2026-10-18 22:17 (...)" -> "2026-10-18 22:17"; sin hora -> 00:00
 DESDE="" AVISO=""
 if [[ ! -f "$RAIZ/$MEMORIA" ]]; then
     AVISO="no hay memoria ($MEMORIA)"
-else
+elif ! DESDE="$(ultimo_vaciado "$RAIZ/$MEMORIA")"; then
     LINEA="$(tr -d '\r' < "$RAIZ/$MEMORIA" | grep -m1 'Último vaciado:' || true)"
-    if [[ "$LINEA" =~ Último\ vaciado:\*{0,2}[[:space:]]*([0-9]{4}-[0-9]{2}-[0-9]{2})([[:space:]]+([0-9]{1,2}:[0-9]{2}))? ]]; then
-        FECHA="${BASH_REMATCH[1]}" HORA="${BASH_REMATCH[3]:-00:00}"
-        (( ${#HORA} == 4 )) && HORA="0$HORA"
-        if date -d "$FECHA $HORA" +%s >/dev/null 2>&1; then DESDE="$FECHA $HORA"; fi
-    fi
-    [[ -z "$DESDE" ]] && AVISO="'Último vaciado' ilegible en $MEMORIA (${LINEA:-sin esa línea})"
+    AVISO="'Último vaciado' ilegible en $MEMORIA (${LINEA:-sin esa línea})"
 fi
-
 echo
 if [[ -n "$DESDE" ]]; then
     echo "===== Tablón: filas hacia $ROL desde el último vaciado ($DESDE)"
@@ -71,6 +64,11 @@ for F in "$RAIZ/$TABLON" "$RAIZ"/docs/direccion/entregas_nube/*.txt; do
         [[ "$F" == */entregas_nube/* ]] && FILA="$FILA   [sin volcar: ${F#"$RAIZ"/}]"
         echo "$FILA"
         N=$((N + 1))
-    done < <(grep -E "\| *$ROL[[:space:]]*\$" "$F" || true)
+    done < <(grep -E "\| *${ROL}[[:space:]]*\$" "$F" || true)
 done
 echo "($N fila(s))"
+if [[ "$ROL" == coordinador && -f "$RAIZ/$TABLON" ]]; then
+    FILAS_TABLON=$(grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} \|' "$RAIZ/$TABLON")
+    (( FILAS_TABLON > 200 )) && echo "AVISO: el tablón tiene $FILAS_TABLON filas (>200). Archívalo: ./tools/hooks/archivar_tablon.sh coordinador"
+fi
+exit 0

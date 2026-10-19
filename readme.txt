@@ -83,6 +83,7 @@ docs/direccion/
    plan_nocturno.md                Los lotes de la ronda.
    pendientes_manana.md            Las dudas para la persona responsable.
    entregas_nube/                  Líneas del tablón que dejan las sesiones en la nube.
+   archivo/                        Líneas viejas del tablón, archivadas por el coordinador.
    roles/<rol>.md                  Una ficha por rol.
    roles/memoria_<rol>.md          Una memoria por rol.
    roles/plantilla_encargo.md      Ficha de encargo a subagentes.
@@ -101,12 +102,14 @@ tools/hooks/                       Las guardas:
                                    las líneas del tablón: nadie guarda la línea de otro).
    pre-commit-motor.sh             (opcional) comprobaciones propias del motor.
    volcar_entregas_nube.sh         Pasa al tablón las líneas de la nube.
+   archivar_tablon.sh              El coordinador archiva las líneas viejas del tablón (ya leídas por todos).
    git_guard.sh, leer_json.sh      Piezas auxiliares.
    tests/prueba_guardas.sh         Prueba rápida de que todas las guardas funcionan.
    tests/motor_falso.sh            Motor de mentira para esas pruebas (no hace falta el real).
 tools/locks/with_lock.sh           Los candados.
 tools/motor_silencioso.sh          ÚNICA forma de abrir el motor: sin sonido y con candado. Guarda la
-                                   salida en .motor_logs/ y da un resumen corto con los errores.
+                                   salida en .motor_logs/ y da un resumen corto con los errores y los
+                                   archivos que el motor ha creado o cambiado (por dueño).
 tools/auditoria/auditoria_proceso.sh  Revisión del proceso que hace el auditor.
 tools/auditoria/ruido_motor.txt    Errores del motor que el auditor ha dado por benignos.
 

@@ -4,8 +4,9 @@
 - `docs/direccion/plan_nocturno.md`
 - `docs/direccion/pendientes_manana.md`
 - `docs/direccion/roles/memoria_coordinador.md`
-- Archivado de `docs/direccion/tablon.md` (al llegar a ~200 líneas; es el único rol que puede editarlo, y solo para eso).
-  Añadir filas lo hace cualquier rol con `./tools/hooks/entregar.sh`.
+- `docs/direccion/archivo/**`: archivado de `docs/direccion/tablon.md` con `./tools/hooks/archivar_tablon.sh coordinador`
+  cuando pasa de ~200 filas (avisan `arranque_rol.sh` y la auditoría). Nadie edita el tablón a mano; añadir filas lo hace
+  cualquier rol con `./tools/hooks/entregar.sh`.
 - Documentos de dirección, **solo con aprobación de la persona responsable** (anotada antes en `pendientes_manana.md`):
   `CLAUDE.md`, `docs/direccion/normas_comunes.md`, `docs/direccion/especificaciones.md`,
   `docs/direccion/roles/<rol>.md` (fichas), `docs/direccion/roles/plantilla_memoria.md` y `docs/direccion/roles/plantilla_encargo.md`.

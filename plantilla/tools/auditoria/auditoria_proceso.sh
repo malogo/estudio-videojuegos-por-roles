@@ -9,7 +9,8 @@
 #                  <raiz>/tools/auditoria/excepciones_proceso.txt; puede no existir)
 #
 # Revisa:
-# 1. Filas del tablón con formato "YYYY-MM-DD HH:MM | origen | qué | ruta | destino" y roles válidos.
+# 1. Filas del tablón con formato "YYYY-MM-DD HH:MM | origen | qué | ruta | destino" y roles válidos; más de 200 filas
+#    (toca archivarlo con tools/hooks/archivar_tablon.sh).
 # 2. Commits de las últimas 24 h que tocan rutas de otro dueño (según docs/direccion/roles/<rol>.md),
 #    salvo los listados en el archivo de excepciones.
 # 3. Candados tools/locks/*.lock: huérfanos (modo pid: ni el envoltorio ni el comando siguen vivos), probables
@@ -74,10 +75,11 @@ es_destino() { local d; es_rol "$1" && return 0; for d in "${DESTINOS_EXTRA[@]}"
 leer() { tr -d '\r' < "$1"; }
 
 # --- 1. Formato del tablón -------------------------------------------------------------
-N=0
+N=0 N_FILAS=0
 while IFS= read -r LINEA; do
     N=$((N + 1))
     [[ -z "${LINEA// /}" || "$LINEA" == \#* ]] && continue
+    N_FILAS=$((N_FILAS + 1))
     if [[ ! "$LINEA" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2})\ \|\ ([^|]+)\ \|\ ([^|]+)\ \|\ ([^|]+)\ \|\ ([^|]+)$ ]]; then
         anotar 1 "línea $N: formato incorrecto → \`${LINEA:0:120}\`"
         continue
@@ -87,6 +89,7 @@ while IFS= read -r LINEA; do
     es_rol "$ORIGEN" || anotar 1 "línea $N: origen no es un rol válido \`$ORIGEN\`"
     es_destino "$DESTINO" || anotar 1 "línea $N: destino no es un rol válido \`$DESTINO\`"
 done < <(leer "$TABLON")
+(( N_FILAS > 200 )) && anotar 1 "el tablón tiene $N_FILAS filas (>200): coordinador debe archivarlo con \`./tools/hooks/archivar_tablon.sh coordinador\`"
 
 # --- 2. Commits fuera de dueño (últimas 24 h) ------------------------------------------
 # Patrones de cada rol: rutas entre comillas invertidas de la sección "Dueño Exclusivo" de su ficha.
@@ -225,7 +228,7 @@ cerrar_entrada
 
 # --- Informe -----------------------------------------------------------------------------
 TITULOS=(""
-    "1. Formato del tablón"
+    "1. Formato y tamaño del tablón"
     "2. Commits fuera de dueño (últimas 24 h)"
     "3. Candados huérfanos u ocupados demasiado tiempo"
     "4. Plan nocturno frente al tablón"

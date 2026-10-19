@@ -2,7 +2,7 @@
 # Hook PreToolUse de Claude Code para Edit|Write|MultiEdit|NotebookEdit (registrado en .claude/settings.json).
 # Bloquea (código 2) la edición de archivos del repo que no son del rol de la sesión según propiedad.tsv.
 # El rol sale de $CLAUDE_ROL o de "./tools/hooks/fijar_rol.sh <rol>" (registrado por pre_tool_guard.sh).
-# El tablón no se edita (salvo coordinador, para archivarlo): las filas se añaden con entregar.sh.
+# El tablón no se edita a mano: las filas se añaden con entregar.sh y se archivan con archivar_tablon.sh.
 # Límite: no ve las escrituras hechas desde Bash (sed -i, >, cp...); para eso está el hook commit-msg.
 
 set -uo pipefail
@@ -34,9 +34,10 @@ REL="${RUTA#"$RAIZ"/}"
 
 DUENO="$(dueno_de_ruta "$REL")"
 ROL="$(rol_de_sesion "$SESION" "$AGENTE")"
-# El tablón solo se amplía con entregar.sh (fila con hora real y commit atómico); coordinador lo edita para archivarlo.
-if [[ "$REL" == docs/direccion/tablon.md && "$ROL" != coordinador ]]; then
+# El tablón solo se amplía con entregar.sh (fila con hora real y commit atómico) y se archiva con archivar_tablon.sh.
+if [[ "$REL" == docs/direccion/tablon.md ]]; then
     echo "[BLOQUEADO POR NORMA] El tablón no se edita a mano: usa ./tools/hooks/entregar.sh <rol> \"<qué>\" \"<ruta o commit>\" <destino> [-- <rutas>]." >&2
+    [[ "$ROL" == coordinador ]] && echo "  Para archivarlo: ./tools/hooks/archivar_tablon.sh coordinador" >&2
     exit 2
 fi
 [[ "$DUENO" == "*" ]] && exit 0

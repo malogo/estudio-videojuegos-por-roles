@@ -23,7 +23,8 @@
 - Las filas solo se añaden con `./tools/hooks/entregar.sh <rol> "<qué>" "<ruta o commit>" <destino> [-- <rutas>]`:
   pone la hora real y commitea tu fila con tus rutas en una orden. Escribir en el tablón a mano (Edit, `>>`, `tee`) está bloqueado.
 - Para despertar a otro rol: entrada en el tablón + mensaje `"Tienes trabajo en el tablón"`.
-- Solo `coordinador` archiva el tablón (al llegar a ~200 líneas).
+- Solo `coordinador` archiva el tablón (al pasar de ~200 filas): `./tools/hooks/archivar_tablon.sh coordinador` mueve a
+  `docs/direccion/archivo/` las filas que ya leyeron todos los roles (anteriores al «Último vaciado» más antiguo) y deja las 50 últimas.
 - El tablón es la única fuente del estado de los lotes; el plan nocturno solo planifica. Estados del plan: `pendiente`, `en curso`, `hecho`, `entregado`, `bloqueado`.
 
 ## 4. Git (árbol compartido)

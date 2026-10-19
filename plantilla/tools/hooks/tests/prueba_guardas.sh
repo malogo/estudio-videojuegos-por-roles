@@ -64,7 +64,7 @@ espera_ok "arranque_rol.sh coordinador registra el rol" orden "./tools/hooks/fij
 espera_ok "coordinador edita su plan" edit "$R/docs/direccion/plan_nocturno.md"
 espera_rechazo "coordinador NO edita un hook (de arquitecto-sistemas)" "no de 'coordinador'" edit "$R/tools/hooks/pre-commit"
 espera_rechazo "ruta sin dueño bloqueada" "no tiene dueño" edit "$R/sin_dueno/x.txt"
-espera_ok "coordinador edita el tablón (para archivarlo)" edit "$R/docs/direccion/tablon.md"
+espera_rechazo "ni coordinador edita el tablón a mano (lo archiva un script)" "archivar_tablon.sh" edit "$R/docs/direccion/tablon.md"
 espera_ok "fijar_rol.sh auditor-calidad" orden "./tools/hooks/fijar_rol.sh auditor-calidad"
 espera_rechazo "otro rol NO edita el tablón a mano" "entregar.sh" edit "$R/docs/direccion/tablon.md"
 espera_ok "fijar_rol.sh coordinador" orden "./tools/hooks/fijar_rol.sh coordinador"
@@ -136,6 +136,48 @@ else cat "$TMP/e1" "$TMP/e2" > "$TMP/salida"; mal "dos entregas a la vez (códig
 espera_codigo ".git/index.lock que no se va: no entrega y no lo borra" 75 "index.lock" $EN coordinador "x" x auditor-calidad
 if [[ -e "$(git rev-parse --git-path index.lock)" ]]; then ok "... y el index.lock sigue ahí"; else mal "entregar.sh borró index.lock"; fi
 rm -f "$(git rev-parse --git-path index.lock)"
+
+echo "== Archivado del tablón (archivar_tablon.sh)"
+AR=./tools/hooks/archivar_tablon.sh
+mapfile -t ROLES_P < <(bash -c 'source tools/hooks/propiedad.sh; printf "%s\n" "${ROLES_VALIDOS[@]}"')
+memorias() {  # memorias <vaciado de todos> [<rol> <vaciado propio>]
+    local r v
+    for r in "${ROLES_P[@]}"; do
+        v="$1"; [[ "$r" == "${2:-}" ]] && v="$3"
+        printf '# Memoria\n**Último vaciado:** %s | **Último commit:** `x`\n' "$v" > "docs/direccion/roles/memoria_$r.md"
+    done
+}
+mkdir -p docs/direccion/roles
+git checkout -q HEAD -- docs/direccion/tablon.md
+T=docs/direccion/tablon.md
+{ grep '^#' $T; for d in "2000-01-01 00:00" "2000-01-02 00:00" "2000-01-03 10:00" "2000-01-04 00:00"; do
+    printf '%s | coordinador | viejo %s | x | auditor-calidad\n' "$d" "${d:8:2}"; done; grep -vE '^(#|$)' $T; } > "$TMP/viejo"
+# Las filas viejas no pasan la hora real de pre-commit: se meten en HEAD sin hooks (solo para preparar la prueba)
+cp "$TMP/viejo" $T
+git commit -q --no-verify -m "coordinador: filas viejas" -- docs/direccion/tablon.md
+N_ANTES=$(grep -cE '^[0-9]{4}-' docs/direccion/tablon.md)
+memorias "2000-01-05 00:00" auditor-calidad "2000-01-03 12:00"
+espera_codigo "solo coordinador archiva" 64 "Solo coordinador" $AR auditor-calidad
+espera_codigo "--simular: 3 filas anteriores al vaciado más antiguo" 0 "se moverían 3 de $N_ANTES" $AR coordinador --simular --dejar 2
+printf 'sin fecha\n' > "docs/direccion/roles/memoria_${ROLES_P[1]}.md"
+espera_codigo "memoria ilegible: no archiva nada" 1 "no se puede leer" $AR coordinador --dejar 2
+memorias "2000-01-05 00:00" auditor-calidad "2000-01-03 12:00"
+fila coordinador
+espera_codigo "tablón con una entrega a medias: no toca nada" 75 "sin commitear" $AR coordinador --dejar 2
+git checkout -q HEAD -- docs/direccion/tablon.md
+espera_codigo "archiva las 3 filas viejas con su propio commit" 0 "Archivado" $AR coordinador --dejar 2
+ARCH="docs/direccion/archivo/tablon_$(date +%Y-%m-%d).md"
+if ! grep -q "viejo 0[123]" docs/direccion/tablon.md && grep -q "viejo 04" docs/direccion/tablon.md \
+    && [[ "$(grep -c '^2000' "$ARCH")" == 3 ]] && git diff --quiet HEAD -- docs/direccion/tablon.md "$ARCH" \
+    && git log -1 --format=%s | grep -q "^coordinador: archiva 3 filas"; then
+    ok "... la fila del 04 (posterior al corte) se queda; el archivo y el commit llevan las otras"
+else git log -1 --stat > "$TMP/salida"; mal "archivado incorrecto"; fi
+memorias "2999-01-01 00:00"
+espera_codigo "con todos al día se dejan las N últimas" 0 "Archivado" $AR coordinador --dejar 2
+if [[ "$(grep -cE '^[0-9]{4}-' docs/direccion/tablon.md)" == 2 && "$(grep -c '^2000' "$ARCH")" == 4 ]]; then
+    ok "... quedan 2 filas y el archivo del día se amplía"; else mal "no se dejaron las 2 últimas"; fi
+espera_codigo "nada más que archivar -> 0" 0 "Nada que archivar" $AR coordinador --dejar 2
+rm -f docs/direccion/roles/memoria_*.md
 
 echo "== Candados"
 CL=./tools/locks/with_lock.sh

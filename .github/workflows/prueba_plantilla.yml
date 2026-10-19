@@ -35,7 +35,7 @@ jobs:
       - name: Sin marcadores sin rellenar (salvo {{COMPLETAR}} de roles extra)
         working-directory: ${{ env.DESPLIEGUE }}
         run: |
-          if grep -rn "{{" CLAUDE.md docs tools .claude | grep -v "{{COMPLETAR}}"; then
+          if grep -rn "{{" CLAUDE.md docs tools .claude | grep -v "{{COMPLETAR[:}]"; then
             echo "::error::Quedan marcadores sin rellenar"; exit 1
           fi
 

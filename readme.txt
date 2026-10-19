@@ -47,6 +47,7 @@ La idea es la de un pequeño estudio:
   archivos ajenos, que no haya candados olvidados...).
 - Motor sin sonido y con candado: el motor del juego solo se abre en modo silencioso y de
   uno en uno (un "candado" impide que dos sesiones lo usen a la vez y estropeen la caché).
+  El candado dura lo que dure el motor, aunque la sesión que lo lanzó se corte a medias.
 - Sesiones en la nube: también se puede encargar trabajo a sesiones de Claude Code en la
   web. Trabajan en su propia rama, abren una propuesta de cambio (PR) y dejan su línea del
   tablón en un archivo aparte; al aceptarla, el coordinador la pasa al tablón.
@@ -240,6 +241,11 @@ Cambia según la plataforma:
 - La guarda de edición no ve lo que se escribe con órdenes de terminal (copiar, redirigir);
   eso lo para el hook commit-msg al guardar.
 - El rol lo declara la propia sesión: el sistema evita despistes, no engaños deliberados.
+- Candados: con la orden "flock" (Linux) los da el sistema operativo y se sueltan solos. Sin
+  ella (Git Bash en Windows, macOS sin "brew install flock") se usa un archivo con el PID: si
+  ese PID lo reutiliza otro proceso, en Linux y macOS se detecta por su hora de arranque; en
+  Windows no se puede saber y, pasadas 6 horas (CANDADO_MAX_HORAS), el candado avisa de
+  "probable huérfano" con la orden para liberarlo a mano. Nunca se roba solo.
 - La batería completa de pruebas de las guardas del proyecto original no se trae: era
   específica de aquel proyecto. Se incluye tools/hooks/tests/prueba_guardas.sh, más corta.
 - En Unreal conviene Git LFS para los .uasset; la plantilla no lo configura sola.

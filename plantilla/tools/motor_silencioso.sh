@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Uso: ./tools/motor_silencioso.sh <rol> [argumentos del motor...]
 # Única forma permitida de lanzar el motor ({{MOTOR}}): siempre sin sonido ni ventanas que suenen,
-# y con el candado PID "motor" (una sola sesión a la vez usa la caché del proyecto).
+# y con el candado "motor" (una sola sesión a la vez usa la caché del proyecto).
 # Funciona desde cualquier carpeta: añade la ruta del proyecto si no se pasa ya.
 # El ejecutable sale de $MOTOR_BIN o, si no está, del valor por defecto de abajo.
 

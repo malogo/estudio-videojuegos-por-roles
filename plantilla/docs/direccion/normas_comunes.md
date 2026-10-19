@@ -35,9 +35,10 @@
 
 ## 5. Motor ({{MOTOR}}) y sonido
 - PROHIBIDO lanzar el motor directamente. Siempre `./tools/motor_silencioso.sh <rol> ...`
-  (fuerza el modo sin sonido y adquiere el candado PID `motor`).
+  (fuerza el modo sin sonido y adquiere el candado `motor`, que dura mientras viva el motor).
 - Builds: `./tools/locks/with_lock.sh {{CANDADO_BUILD}} <rol> <comando>`.
 - Si el candado está ocupado (código 75): no reintentes en bucle; sigue con otra tarea y vuelve después.
+  Si avisa de «probable huérfano», comprueba el PID con la orden que da y, si no es el motor ni una build, libéralo como indica.
 - Prohibido reproducir sonido o abrir enlaces de audio/vídeo.
 - Nunca commitees cachés del motor ni `tools/locks/*.lock`. Ningún audio o vídeo arranca solo al cargar una escena.
 - Buenas prácticas: se sigue la guía oficial del motor ({{GUIA_BUENAS_PRACTICAS}}). Desviarse se justifica en el commit.

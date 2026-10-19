@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Hook commit-msg: fuerza la propiedad de archivos (normas_comunes.md §2).
+# El mensaje debe empezar por "<rol>:" y todas las rutas del commit deben ser de ese rol
+# según tools/hooks/propiedad.tsv. Excepciones: las rutas "*" (tablón y docs/direccion/entregas_nube/*.txt)
+# y los commits de merge.
+# Se instala con: git config core.hooksPath tools/hooks
+
+set -uo pipefail
+
+HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=propiedad.sh
+source "$HOOKS_DIR/propiedad.sh"
+
+# Merge: las rutas ya pasaron el hook en los commits de cada rama
+if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    exit 0
+fi
+
+PRIMERA="$(grep -v '^#' "$1" | grep -m1 -v '^[[:space:]]*$' || true)"
+ROL="${PRIMERA%%:*}"
+if [[ "$PRIMERA" != *:* ]] || ! rol_valido "$ROL"; then
+    echo "[ERROR COMMIT-MSG] El mensaje debe empezar por '<rol>: <qué>'." >&2
+    echo "  Roles válidos: ${ROLES_VALIDOS[*]}" >&2
+    exit 1
+fi
+
+AJENAS=()
+while IFS= read -r -d '' RUTA; do
+    DUENO="$(dueno_de_ruta "$RUTA")"
+    [[ "$DUENO" == "*" || "$DUENO" == "$ROL" ]] && continue
+    AJENAS+=("  $RUTA -> ${DUENO:-SIN DUEÑO en tools/hooks/propiedad.tsv}")
+done < <(git diff --cached --name-only --no-renames -z)
+
+if (( ${#AJENAS[@]} )); then
+    echo "[ERROR COMMIT-MSG] '$ROL' no es dueño de estas rutas:" >&2
+    printf '%s\n' "${AJENAS[@]}" >&2
+    echo "Pide el cambio por tablón a su dueño. Si la ruta no tiene dueño, pide a arquitecto-sistemas que la asigne." >&2
+    exit 1
+fi
+exit 0

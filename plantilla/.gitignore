@@ -1,0 +1,6 @@
+# Candados PID y estado temporal de contexto (nunca se commitean)
+tools/locks/*.lock
+.claude_context_tokens
+
+# Generado por el motor ({{MOTOR}})
+{{IGNORAR_MOTOR}}

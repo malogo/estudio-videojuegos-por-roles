@@ -1,0 +1,44 @@
+# Propiedad de archivos: patrón de ruta (relativa a la raíz del repo) <TAB> rol dueño.
+# Fuente: docs/direccion/roles/*.md y normas_comunes.md §2. Dueño de este archivo: arquitecto-sistemas.
+# Gana la PRIMERA coincidencia (las memorias van antes que las fichas). "*" = cualquier rol.
+# Comodines: "*" dentro de un segmento, "**" cualquier profundidad, "**/" cero o más carpetas.
+# Una ruta sin patrón no tiene dueño y se rechaza: pide por tablón a arquitecto-sistemas que la asigne.
+
+# Comunes
+docs/direccion/tablon.md	*
+docs/direccion/entregas_nube/*.txt	*
+
+# Memorias (una por rol)
+docs/direccion/roles/memoria_{{ROL}}.md	{{ROL}}
+
+# coordinador (dirección; fichas y plantillas vía roles/*.md)
+CLAUDE.md	coordinador
+docs/direccion/normas_comunes.md	coordinador
+docs/direccion/especificaciones.md	coordinador
+docs/direccion/plan_nocturno.md	coordinador
+docs/direccion/pendientes_manana.md	coordinador
+docs/direccion/roles/*.md	coordinador
+
+# arquitecto-sistemas (código base, configuración del motor y del repositorio, hooks)
+{{CONFIG_MOTOR}}	arquitecto-sistemas
+{{RUTA_NUCLEO}}	arquitecto-sistemas
+tools/hooks/**	arquitecto-sistemas
+tools/locks/**	arquitecto-sistemas
+tools/motor_silencioso.sh	arquitecto-sistemas
+.gitignore	arquitecto-sistemas
+.gitattributes	arquitecto-sistemas
+.claude/**	arquitecto-sistemas
+
+# especialista-escenas-ui (escenas, niveles e interfaz)
+{{RUTA_ESCENAS}}	especialista-escenas-ui
+
+# director-arte (arte y su guía de estilo)
+{{RUTA_ARTE}}	director-arte
+docs/arte/**	director-arte
+
+# auditor-calidad (tests, auditoría de proceso e informes)
+{{RUTA_TESTS}}	auditor-calidad
+tools/auditoria/**	auditor-calidad
+docs/calidad/**	auditor-calidad
+
+# Roles extra: añade aquí sus rutas (ver cuestionario.md, P5).

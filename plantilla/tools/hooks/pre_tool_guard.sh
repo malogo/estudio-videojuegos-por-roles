@@ -19,13 +19,10 @@ source "$HOOKS_DIR/propiedad.sh"
 source "$HOOKS_DIR/leer_json.sh"
 
 ENTRADA="$(cat)"
-ORDEN="" SESION="" AGENTE=""
-if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
-    echo "[pre_tool_guard] Sin python ni node: no se pueden comprobar las normas de órdenes." >&2
-    exit 0
-fi
-{ IFS= read -r -d '' ORDEN; IFS= read -r -d '' _; IFS= read -r -d '' SESION; IFS= read -r -d '' AGENTE; } \
-    < <(printf '%s' "$ENTRADA" | campos_hook)
+ORDEN="" SESION="" AGENTE="" LEIDO=""
+{ IFS= read -r -d '' ORDEN; IFS= read -r -d '' _; IFS= read -r -d '' SESION; IFS= read -r -d '' AGENTE
+  IFS= read -r -d '' LEIDO; } < <(printf '%s' "$ENTRADA" | campos_hook)
+[[ "$LEIDO" == OK ]] || bloquear_sin_json pre_tool_guard
 ORDEN="${ORDEN//$'\r'/}"
 [[ -z "$ORDEN" ]] && exit 0
 

@@ -262,6 +262,8 @@ Cambia según la plataforma:
 - La guarda de edición no ve lo que se escribe con órdenes de terminal (copiar, redirigir);
   eso lo para el hook commit-msg al guardar.
 - El rol lo declara la propia sesión: el sistema evita despistes, no engaños deliberados.
+- Las guardas de Claude Code necesitan Python 3 o Node que funcionen: si no pueden leer la llamada, bloquean
+  (fallan cerradas) en vez de dejar pasar todo en silencio.
 - Con más de 2 sesiones a la vez, el árbol compartido se vuelve estrecho: ver 6.9 (worktrees).
 - Candados: con la orden "flock" (Linux) los da el sistema operativo y se sueltan solos. Sin
   ella (Git Bash en Windows, macOS sin "brew install flock") se usa un archivo con el PID: si

@@ -191,6 +191,39 @@ if [[ "$(grep -cE '^[0-9]{4}-' docs/direccion/tablon.md)" == 2 && "$(grep -c '^2
 espera_codigo "nada más que archivar -> 0" 0 "Nada que archivar" $AR coordinador --dejar 2
 rm -f docs/direccion/roles/memoria_*.md
 
+echo "== Saltarse los hooks de git (hook PreToolUse)"
+espera_rechazo "git commit -n bloqueado" "no-verify" orden "git commit -n -m x -- a"
+espera_rechazo "git commit --no-verify bloqueado" "no-verify" orden "git commit --no-verify -m x -- a"
+espera_rechazo "git -c core.hooksPath=... bloqueado" "core.hooksPath" orden "git -c core.hooksPath=/dev/null commit -m x -- a"
+espera_rechazo "git -c core.hooksPath (sin valor) bloqueado" "core.hooksPath" orden "git -c core.hooksPath commit -m x -- a"
+espera_rechazo "git config core.hooksPath '' bloqueado" "core.hooksPath" orden "git config core.hooksPath ''"
+espera_rechazo "GIT_CONFIG_COUNT=... delante bloqueado" "GIT_CONFIG_COUNT" orden "GIT_CONFIG_COUNT=1 git commit -m x -- a"
+espera_ok "GIT_CONFIG_NOSYSTEM=1 delante permitido" orden "GIT_CONFIG_NOSYSTEM=1 git status"
+espera_ok "git config core.hooksPath tools/hooks permitido" orden "git config core.hooksPath tools/hooks"
+espera_ok "git config --get core.hooksPath permitido" orden "git config --get core.hooksPath"
+
+echo "== Guardas que fallan cerradas (sin python ni node que funcionen)"
+mkdir -p "$TMP/roto"
+for b in python python3 node; do printf '#!/bin/sh\nexit 1\n' > "$TMP/roto/$b"; chmod +x "$TMP/roto/$b"; done
+espera_rechazo "Edit bloqueado si no se puede leer la llamada" "No se pudo leer" \
+    env PATH="$TMP/roto:$PATH" bash -c "$(declare -f json_edit edit); edit '$R/docs/direccion/plan_nocturno.md'"
+espera_rechazo "Bash bloqueado si no se puede leer la llamada" "No se pudo leer" \
+    env PATH="$TMP/roto:$PATH" bash -c "$(declare -f json_bash orden); orden 'ls'"
+espera_ok "orden con tildes permitida (JSON en UTF-8)" orden "echo canción y añadido"
+
+echo "== Permisos de ejecución en git (proyecto real; en Linux y en la nube, sin +x los hooks se ignoran)"
+if git -C "$RAIZ_SRC" rev-parse --git-dir >/dev/null 2>&1 && [[ -n "$(git -C "$RAIZ_SRC" ls-files -- tools)" ]]; then
+    SIN_X=()
+    while read -r MODO _ _ RUTA; do
+        [[ "$(head -c2 "$RAIZ_SRC/$RUTA" 2>/dev/null)" == '#!' && "$MODO" != 100755 ]] && SIN_X+=("$RUTA")
+    done < <(git -C "$RAIZ_SRC" ls-files -s -- tools)
+    printf '%s\n' "${SIN_X[@]}" > "$TMP/salida"
+    if (( ${#SIN_X[@]} == 0 )); then ok "los scripts de tools/ tienen +x en git"
+    else mal "scripts sin +x en git (arregla con: git update-index --chmod=+x -- <ruta>)"; fi
+else
+    echo "  (se omite: tools/ aún no está en git)"
+fi
+
 echo "== Candados"
 CL=./tools/locks/with_lock.sh
 # PID del comando que ejecuta el candado <nombre> (lo apunta with_lock.sh tras lanzarlo)

@@ -15,13 +15,10 @@ source "$HOOKS_DIR/propiedad.sh"
 source "$HOOKS_DIR/leer_json.sh"
 
 ENTRADA="$(cat)"
-RUTA="" SESION="" AGENTE=""
-if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
-    echo "[guard_propiedad] Sin python ni node: no se puede comprobar la propiedad de archivos." >&2
-    exit 0
-fi
-{ IFS= read -r -d '' _; IFS= read -r -d '' RUTA; IFS= read -r -d '' SESION; IFS= read -r -d '' AGENTE; } \
-    < <(printf '%s' "$ENTRADA" | campos_hook)
+RUTA="" SESION="" AGENTE="" LEIDO=""
+{ IFS= read -r -d '' _; IFS= read -r -d '' RUTA; IFS= read -r -d '' SESION; IFS= read -r -d '' AGENTE
+  IFS= read -r -d '' LEIDO; } < <(printf '%s' "$ENTRADA" | campos_hook)
+[[ "$LEIDO" == OK ]] || bloquear_sin_json guard_propiedad
 [[ -z "$RUTA" ]] && exit 0
 
 # Ruta relativa a la raíz del repo (Windows: C:\... -> /c/...). Fuera del repo o en .git/ no se vigila.

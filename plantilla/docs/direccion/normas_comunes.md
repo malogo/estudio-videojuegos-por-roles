@@ -29,7 +29,8 @@
 - El tablón es la única fuente del estado de los lotes; el plan nocturno solo planifica. Estados del plan: `pendiente`, `en curso`, `hecho`, `entregado`, `bloqueado`.
 
 ## 4. Git (árbol compartido)
-- PROHIBIDO: `git stash`, `git add -A`/`.`, `git commit -a`, `git reset --hard`, `git checkout|restore .`, `git clean -f`.
+- PROHIBIDO: `git stash`, `git add -A`/`.`, `git commit -a`, `git reset --hard`, `git checkout|restore .`, `git clean -f`,
+  `git commit -n`/`--no-verify` y cambiar `core.hooksPath` (con `git config`, `git -c` o `GIT_CONFIG_*`).
 - Commit siempre por rutas, con prefijo `<rol>:` y tu fila del tablón: `./tools/hooks/entregar.sh <rol> "<qué>" "<ruta o commit>" <destino> -- <rutas>`
   (commit `<rol>: <qué>` con tus rutas y solo tu fila; `--cuerpo "<línea>"` para la línea de encargo). Toda fila de un commit
   debe tener como origen el rol del commit: las filas ajenas sin commitear las commitea su dueño.

@@ -42,9 +42,12 @@ python3 <PLANTILLA>/rellenar_plantilla.py --valores <ruta>/valores.json --destin
 ```bash
 git init -b <RAMA_PRINCIPAL>          # solo si no era un repositorio
 git add -- CLAUDE.md .gitignore .claude docs tools
+git add --chmod=+x -- tools/hooks/pre-commit tools/hooks/commit-msg $(git ls-files -- 'tools/*.sh')
 git commit -m "coordinador: despliegue inicial del sistema de trabajo"
 ```
 - Rutas explícitas, nunca `git add -A` ni `git add .` (si el hook ya está cargado, los bloquea igualmente).
+- `--chmod=+x` guarda en git el permiso de ejecución. En Windows el archivo no lo lleva y, sin esto, en Linux y en la
+  nube los hooks de git se ignoran en silencio y `./tools/...` da «Permission denied». `prueba_guardas.sh` lo comprueba.
 
 ## 8. Activar los hooks y fijar el rol
 ```bash

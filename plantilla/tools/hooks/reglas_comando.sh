@@ -25,10 +25,23 @@ _es_motor() {
 motivo_bloqueo_git() {
     local -a t=("$@")
     local n=${#t[@]} i=0
-    # Saltar opciones globales (git -C dir, -c clave=valor, --no-pager...)
+    # Saltar opciones globales (git -C dir, -c clave=valor, --no-pager...). Cambiar core.hooksPath al
+    # vuelo (-c / --config-env) desactivaría pre-commit y commit-msg.
     while (( i < n )); do
         case "${t[i]}" in
-            -C|-c|--git-dir|--work-tree|--namespace) i=$((i + 2)) ;;
+            -c|--config-env)
+                if [[ "${t[i+1],,}" == core.hookspath || "${t[i+1],,}" == core.hookspath=* ]]; then
+                    echo "Prohibido cambiar core.hooksPath al vuelo (git ${t[i]} ${t[i+1]}): desactiva los hooks del proyecto."
+                    return 1
+                fi
+                i=$((i + 2)) ;;
+            --config-env=*)
+                if [[ "${t[i],,}" == --config-env=core.hookspath=* ]]; then
+                    echo "Prohibido cambiar core.hooksPath al vuelo (${t[i]}): desactiva los hooks del proyecto."
+                    return 1
+                fi
+                i=$((i + 1)) ;;
+            -C|--git-dir|--work-tree|--namespace) i=$((i + 2)) ;;
             -*) i=$((i + 1)) ;;
             *) break ;;
         esac
@@ -56,9 +69,12 @@ motivo_bloqueo_git() {
                     --all)
                         echo "Prohibido 'git commit --all'. Usa 'git commit -m \"...\" -- <rutas exactas>'."
                         return 1 ;;
+                    --no-verify)
+                        echo "Prohibido 'git commit --no-verify': se salta pre-commit y commit-msg. Si un hook te bloquea, corrige la causa."
+                        return 1 ;;
                     --*) ;;
                     -*)
-                        # Grupos de opciones cortas: -a, -am, -sa... (tras m/F/c/C/t va un valor)
+                        # Grupos de opciones cortas: -a, -am, -n, -sn... (tras m/F/c/C/t va un valor)
                         f="${x#-}"
                         for (( j = 0; j < ${#f}; j++ )); do
                             c="${f:j:1}"
@@ -66,9 +82,23 @@ motivo_bloqueo_git() {
                                 echo "Prohibido 'git commit -a' ($x). Usa 'git commit -m \"...\" -- <rutas exactas>'."
                                 return 1
                             fi
+                            if [[ "$c" == n ]]; then
+                                echo "Prohibido 'git commit -n' ($x, --no-verify): se salta pre-commit y commit-msg."
+                                return 1
+                            fi
                             [[ "$c" == [mFcCt] ]] && break
                         done ;;
                 esac
+            done ;;
+        config)
+            # Escribir o quitar core.hooksPath desactiva los hooks (solo vale el valor del proyecto)
+            for (( j = 0; j < ${#a[@]}; j++ )); do
+                [[ "${a[j],,}" == core.hookspath ]] || continue
+                case " ${a[*],,} " in *" --get "*|*" --get-all "*|*" get "*|*" --list "*|*" -l "*) break ;; esac
+                if [[ "${a[j+1]:-}" != tools/hooks ]] || [[ " ${a[*],,} " == *" --unset"* ]]; then
+                    echo "Prohibido cambiar core.hooksPath: los hooks del proyecto van en tools/hooks."
+                    return 1
+                fi
             done ;;
         reset)
             for x in "${a[@]}"; do
@@ -210,6 +240,10 @@ motivo_bloqueo_linea() {
         # Saltar prefijos: VAR=valor, &, exec, env, command...
         while (( k < n )); do
             case "${tok[k]}" in
+                GIT_CONFIG=*|GIT_CONFIG_COUNT=*|GIT_CONFIG_KEY_*=*|GIT_CONFIG_VALUE_*=*|GIT_CONFIG_PARAMETERS=*|GIT_CONFIG_GLOBAL=*|GIT_CONFIG_SYSTEM=*)
+                    # Configuración de git por entorno o en otro archivo: puede cambiar core.hooksPath
+                    echo "Prohibido '${tok[k]%%=*}=...' delante de una orden: puede saltarse los hooks del proyecto."
+                    return 1 ;;
                 *=*|'&'|'!'|'{'|exec|command|env|sudo|nohup|time|then|do|else) k=$((k + 1)) ;;
                 *) break ;;
             esac

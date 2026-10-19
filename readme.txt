@@ -71,7 +71,8 @@ Candado .......... impide que dos sesiones usen el motor o hagan una build a la 
 --------------------------------------------------------------
 CLAUDE.md                          Lo primero que lee cada sesión: cómo arrancar con su rol.
 .gitignore                         Archivos que nunca se guardan (cachés y logs del motor, candados).
-.claude/settings.json              Activa los hooks y prohíbe los subagentes genéricos.
+.gitattributes                     Scripts siempre con finales de línea LF (y, si hace falta, Git LFS).
+.claude/settings.json              Activa los hooks y la línea de estado, y prohíbe los subagentes genéricos.
 .claude/agents/                    Los 3 subagentes del proyecto:
    agente-ejecutor-lote.md            código que exige pensar (modelo medio).
    agente-ejecutor-mecanico.md        cambios repetitivos con un patrón (modelo medio).
@@ -103,7 +104,11 @@ tools/hooks/                       Las guardas:
    pre-commit-motor.sh             (opcional) comprobaciones propias del motor.
    volcar_entregas_nube.sh         Pasa al tablón las líneas de la nube.
    archivar_tablon.sh              El coordinador archiva las líneas viejas del tablón (ya leídas por todos).
-   git_guard.sh, leer_json.sh      Piezas auxiliares.
+   linea_estado.sh                 Línea de estado: rol de la ventana y su contexto (y lo apunta).
+   aviso_contexto.sh               Al llegar cada mensaje, avisa a la sesión de que toca volcar memoria y vaciar.
+   inicio_sesion.sh                Al abrir, compactar o limpiar una sesión, le recuerda su rol registrado.
+   git_guard.sh, leer_json.sh,     Piezas auxiliares (requisitos.sh: exige bash 4 o posterior).
+   contexto.sh, requisitos.sh
    tests/prueba_guardas.sh         Prueba rápida de que todas las guardas funcionan.
    tests/motor_falso.sh            Motor de mentira para esas pruebas (no hace falta el real).
 tools/locks/with_lock.sh           Los candados.
@@ -116,11 +121,11 @@ tools/auditoria/ruido_motor.txt    Errores del motor que el auditor ha dado por 
 
 5. CÓMO SE DESPLIEGA (desde UNA sesión de chat)
 -----------------------------------------------
-1. Copia esta carpeta (estructura_proyectos) a un sitio fijo de tu ordenador.
+1. Copia esta carpeta (la plantilla, p. ej. estudio-videojuegos-por-roles) a un sitio fijo de tu ordenador.
 2. Abre Claude Code en la carpeta del juego (vacía o con el proyecto ya empezado).
 3. Pega esta frase de arranque, cambiando la ruta por la tuya:
 
-   Despliega aquí el sistema de trabajo por roles. La plantilla está en RUTA/estructura_proyectos: lee su desplegar.md y síguelo paso a paso. Empieza por las preguntas de cuestionario.md, de bloque en bloque, y no toques nada del proyecto hasta tener mis respuestas.
+   Despliega aquí el sistema de trabajo por roles. La plantilla está en RUTA/estudio-videojuegos-por-roles: lee su desplegar.md y síguelo paso a paso. Empieza por las preguntas de cuestionario.md, de bloque en bloque, y no toques nada del proyecto hasta tener mis respuestas.
 
 4. Contesta las preguntas (cada una trae un valor por defecto; si dudas, acéptalo).
 5. La sesión rellena la plantilla, crea los archivos, activa los hooks, escribe la primera
@@ -258,10 +263,18 @@ Cambia según la plataforma:
 
 8. LÍMITES CONOCIDOS
 --------------------
-- Las guardas son scripts de bash: en Windows hace falta Git Bash.
+- Las guardas son scripts de bash 4 o posterior: en Windows hace falta Git Bash; en macOS, "brew install bash"
+  (macOS trae bash 3.2) y que su carpeta vaya antes que /bin en el PATH. Con bash 3.2 las guardas bloquean
+  y lo explican, en vez de fallar a medias. El CI de la plantilla las prueba en Linux, macOS y Windows.
 - La guarda de edición no ve lo que se escribe con órdenes de terminal (copiar, redirigir);
   eso lo para el hook commit-msg al guardar.
-- El rol lo declara la propia sesión: el sistema evita despistes, no engaños deliberados.
+- El rol lo declara la propia sesión: el sistema evita despistes, no engaños deliberados. Las órdenes que un
+  modelo usa sin mala intención y que en el árbol compartido rompen el trabajo de otro (git commit --amend,
+  git reset HEAD~1, git checkout de una carpeta...) sí se bloquean, también abreviadas.
+- El aviso de contexto sale de la línea de estado de Claude Code, documentada para la terminal: donde no se
+  muestre (la app de escritorio o la web pueden no ejecutarla) no hay dato y no se avisa; las normas §7 siguen
+  valiendo. La línea de estado del proyecto sustituye a la tuya: si tienes una, llama desde ella a
+  tools/hooks/linea_estado.sh con el mismo JSON.
 - Las guardas de Claude Code necesitan Python 3 o Node que funcionen: si no pueden leer la llamada, bloquean
   (fallan cerradas) en vez de dejar pasar todo en silencio.
 - Con más de 2 sesiones a la vez, el árbol compartido se vuelve estrecho: ver 6.9 (worktrees).
@@ -284,6 +297,6 @@ rellenar_plantilla.py          Copia la plantilla al proyecto y rellena los huec
 ejemplo_valores_unity_pc.json  Ejemplo de respuestas (Unity, PC) en el formato que usa el script.
 ejemplo_valores_godot_pc.json  Lo mismo para Godot (PC).
 actualizar.md                  Cómo llevar una versión nueva de la plantilla a un proyecto ya desplegado.
-.github/workflows/             Prueba automática de la plantilla (despliegue Godot y Unity + pruebas).
+.github/workflows/             Prueba automática de la plantilla (despliegue Godot y Unity + pruebas, en Linux, macOS y Windows).
 plantilla/                     Todos los archivos genéricos, con huecos {{ASI}}.
 extras/godot, extras/unity     Comprobaciones propias de cada motor.

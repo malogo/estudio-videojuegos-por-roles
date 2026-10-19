@@ -20,7 +20,7 @@ con `./tools/hooks/entregar.sh <dueño> "Actualiza la plantilla: <qué>" "<rutas
 | Dueño | Qué | Cómo |
 |---|---|---|
 | `arquitecto-sistemas` | `tools/hooks/*` (scripts, `pre-commit`, `commit-msg`, `tests/`), `tools/locks/with_lock.sh`, `tools/motor_silencioso.sh` | Copiar tal cual (`cp`), salvo que el proyecto los haya cambiado: entonces fusionar. |
-| `arquitecto-sistemas` | `tools/hooks/propiedad.tsv`, `.gitignore`, `.claude/` | Fusionar a mano: llevan rutas propias del proyecto. |
+| `arquitecto-sistemas` | `tools/hooks/propiedad.tsv`, `.gitignore`, `.gitattributes`, `.claude/` | Fusionar a mano: llevan rutas propias del proyecto (si no había `.gitattributes`, cópialo). |
 | `auditor-calidad` | `tools/auditoria/auditoria_proceso.sh` | Copiar. `ruido_motor.txt` y `excepciones_proceso.txt` se conservan (crea `ruido_motor.txt` si no existe). |
 | `coordinador` | `CLAUDE.md`, `docs/direccion/normas_comunes.md`, fichas, `plantilla_encargo.md` | Fusionar a mano, con aprobación de la persona responsable (normas §2). El tablón no se toca: su cabecera vieja sigue valiendo. |
 
@@ -31,7 +31,24 @@ Copia primero lo de `arquitecto-sistemas`: los hooks nuevos son los que validan 
 - `grep -rn "{{" CLAUDE.md docs tools .claude` solo enseña `{{COMPLETAR}}` ya conocidos (o nada).
 - Una ejecución real del motor: `./tools/motor_silencioso.sh arquitecto-sistemas <argumentos de siempre>`.
 
-## 4. Avisos de esta versión (endurecimiento de candados, motor y tablón)
+## 4. Avisos de esta versión (historia compartida, portabilidad y contexto)
+- **Más órdenes bloqueadas**: `git commit --amend`, `git reset <commit>` y `--soft` (mueven la rama), `git checkout|restore`
+  de carpetas o comodines, `git checkout|switch -f`, `export GIT_CONFIG_*`, `git config include.path` y escribir en
+  `.git/config` (también con Edit). Las abreviaturas que git acepta (`--amen`, `--no-veri`, `reset --har`) cuentan igual:
+  antes `--no-veri` y `--har` se colaban. Para corregir un commit, otro commit.
+- **Memorias sin fila**: un commit que solo toca memorias de rol ya no necesita fila del tablón
+  (`git commit -m "<rol>: memoria" -- docs/direccion/roles/memoria_<rol>.md`); commit-msg sigue exigiendo que sea la tuya.
+- **Aviso de contexto**: `.claude_context_tokens` no lo escribía nadie y se quita (también de `.gitignore`). Ahora la
+  línea de estado (`linea_estado.sh`, en `.claude/settings.json`) apunta el contexto de cada sesión y el hook
+  `UserPromptSubmit` (`aviso_contexto.sh`) avisa al modelo; el hook `SessionStart` (`inicio_sesion.sh`) le recuerda su
+  rol tras `/compact` o `/clear`. Al fusionar `.claude/settings.json` añade `statusLine`, `SessionStart` y
+  `UserPromptSubmit`, y quita `MultiEdit` del matcher (ya no existe esa herramienta).
+- **macOS y Windows**: las fechas ya no dependen de `date -d` (GNU) y los scripts exigen bash 4+ con un mensaje claro
+  (macOS: `brew install bash`). Copia `.gitattributes`: sin él, un clon en Windows con `core.autocrlf` deja los scripts
+  en CRLF y bash no los entiende. Si en algún equipo ya están en CRLF: con el árbol limpio y las sesiones paradas, la
+  persona responsable los vuelve a sacar desde su terminal (`rm -rf tools && git checkout HEAD -- tools`).
+
+## 5. Avisos de la versión anterior (endurecimiento de candados, motor y tablón)
 - **Código 65 del motor**: `motor_silencioso.sh` sale con 65 si el motor dio 0 pero el log tiene errores. Órdenes
   encadenadas (`... && ...`) que antes pasaban «en falso» ahora paran: es lo buscado. Si el error es ruido benigno,
   lo silencia `auditor-calidad` en `tools/auditoria/ruido_motor.txt`. La salida del motor ya no entra en el contexto:

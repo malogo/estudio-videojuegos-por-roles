@@ -5,6 +5,9 @@
 #      motivo=$(motivo_bloqueo_git <args de git...>)       || echo "BLOQUEADO: $motivo"
 # Devuelven 1 e imprimen el motivo si la orden está prohibida; 0 si está permitida.
 
+# shellcheck source=requisitos.sh
+source "$(dirname "${BASH_SOURCE[0]}")/requisitos.sh"
+
 _basename_cmd() {
     local b="${1##*/}"
     b="${b##*\\}"
@@ -21,6 +24,56 @@ _es_motor() {
     [[ "$b" =~ $_RE_MOTOR || "$b" == '$motor_bin' || "$b" == '${motor_bin}' || "$b" == '$env:motor_bin' ]]
 }
 
+# Programa que abre un lanzador, para reconocer el motor también así: "flatpak run [opciones] org.godotengine.Godot"
+# -> Godot, "snap run godot-4" -> godot-4, "open -a /Applications/Godot.app" (macOS) -> Godot. Vacío si no lo es.
+_app_lanzada() {
+    local -a t=("$@")
+    local b i
+    b="$(_basename_cmd "${t[0]:-}")"
+    case "$b" in
+        flatpak|snap)
+            [[ "${t[1]:-}" == run ]] || return 0
+            for (( i = 2; i < ${#t[@]}; i++ )); do [[ "${t[i]}" == -* ]] || break; done
+            b="${t[i]:-}"
+            [[ "$b" == *.*.* ]] && b="${b##*.}"
+            printf '%s' "$b" ;;
+        open)
+            for (( i = 1; i < ${#t[@]}; i++ )); do
+                if [[ "${t[i]}" == -a ]]; then b="${t[i+1]:-}"; b="${b%/}"; printf '%s' "${b%.app}"; return 0; fi
+            done ;;
+    esac
+}
+
+# ¿$1 es la opción larga $2 o una abreviatura suya? git acepta abreviaturas sin ambigüedad (--amen = --amend,
+# --no-veri = --no-verify, reset --har = --hard); las ambiguas ya las rechaza git, así que bloquearlas no quita nada.
+_opcion() { local x="${1%%=*}"; [[ "$x" == --?* && "$2" == "$x"* ]]; }
+
+# Claves de configuración que desactivan los hooks del proyecto: core.hooksPath y los archivos incluidos
+# (include.path, includeIf.<condición>.path), que pueden traer otro core.hooksPath.
+_clave_salta_hooks() {
+    local k="${1,,}"
+    k="${k%%=*}"
+    [[ "$k" == core.hookspath || "$k" == include.path || "$k" == includeif.*.path ]]
+}
+
+# ¿"git reset <x>" sin rutas movería la rama? Sí si <x> no es una ruta y es (o parece) un commit distinto de HEAD.
+_mueve_head() {
+    local x="$1" c
+    [[ "$x" == HEAD || "$x" == @ || -e "$x" ]] && return 1
+    if c="$(git rev-parse -q --verify "$x^{commit}" 2>/dev/null)"; then
+        [[ "$c" != "$(git rev-parse -q --verify HEAD 2>/dev/null)" ]]
+        return
+    fi
+    # No se pudo resolver desde aquí (otra carpeta...): basta con que tenga forma de commit
+    [[ "$x" =~ [~^]|@\{ || "$x" =~ ^[0-9a-fA-F]{7,40}$ ]]
+}
+
+# ¿Una ruta de checkout/restore que abarca más que archivos concretos? (".", magia ":/", comodines, carpetas)
+_ruta_amplia() {
+    local p="$1"
+    [[ "$p" == . || "$p" == */ || "$p" == :* || "$p" == *[\*\?\[]* || -d "$p" ]]
+}
+
 # Recibe los argumentos que van detrás de "git".
 motivo_bloqueo_git() {
     local -a t=("$@")
@@ -30,13 +83,13 @@ motivo_bloqueo_git() {
     while (( i < n )); do
         case "${t[i]}" in
             -c|--config-env)
-                if [[ "${t[i+1],,}" == core.hookspath || "${t[i+1],,}" == core.hookspath=* ]]; then
+                if _clave_salta_hooks "${t[i+1]:-}"; then
                     echo "Prohibido cambiar core.hooksPath al vuelo (git ${t[i]} ${t[i+1]}): desactiva los hooks del proyecto."
                     return 1
                 fi
                 i=$((i + 2)) ;;
             --config-env=*)
-                if [[ "${t[i],,}" == --config-env=core.hookspath=* ]]; then
+                if _clave_salta_hooks "${t[i]#--config-env=}"; then
                     echo "Prohibido cambiar core.hooksPath al vuelo (${t[i]}): desactiva los hooks del proyecto."
                     return 1
                 fi
@@ -47,8 +100,8 @@ motivo_bloqueo_git() {
         esac
     done
     local sub="${t[i]:-}"
-    local -a a=("${t[@]:i+1}")
-    local x f j c
+    local -a a=("${t[@]:i+1}") pos=()
+    local x f j c m
 
     case "$sub" in
         stash)
@@ -56,23 +109,29 @@ motivo_bloqueo_git() {
             return 1 ;;
         add)
             for x in "${a[@]}"; do
-                case "$x" in
-                    -A|--all|--no-ignore-removal|.|./|:/|'*')
-                        echo "Prohibido 'git add $x'. Usa 'git commit -m \"...\" -- <rutas exactas>'."
-                        return 1 ;;
-                esac
+                if [[ "$x" == -A || "$x" == . || "$x" == ./ || "$x" == :/ || "$x" == '*' ]] \
+                    || _opcion "$x" --all || _opcion "$x" --no-ignore-removal; then
+                    echo "Prohibido 'git add $x'. Usa 'git commit -m \"...\" -- <rutas exactas>'."
+                    return 1
+                fi
             done ;;
         commit)
             for x in "${a[@]}"; do
                 case "$x" in
                     --) break ;;
-                    --all)
-                        echo "Prohibido 'git commit --all'. Usa 'git commit -m \"...\" -- <rutas exactas>'."
-                        return 1 ;;
-                    --no-verify)
-                        echo "Prohibido 'git commit --no-verify': se salta pre-commit y commit-msg. Si un hook te bloquea, corrige la causa."
-                        return 1 ;;
-                    --*) ;;
+                    --*)
+                        if _opcion "$x" --all; then
+                            echo "Prohibido 'git commit $x' (--all). Usa 'git commit -m \"...\" -- <rutas exactas>'."
+                            return 1
+                        fi
+                        if _opcion "$x" --no-verify; then
+                            echo "Prohibido 'git commit $x' (--no-verify): se salta pre-commit y commit-msg. Si un hook te bloquea, corrige la causa."
+                            return 1
+                        fi
+                        if _opcion "$x" --amend; then
+                            echo "Prohibido 'git commit $x' (--amend) en árbol compartido: el último commit puede ser de otra sesión y te lo quedarías. Haz un commit nuevo."
+                            return 1
+                        fi ;;
                     -*)
                         # Grupos de opciones cortas: -a, -am, -n, -sn... (tras m/F/c/C/t va un valor)
                         f="${x#-}"
@@ -91,10 +150,21 @@ motivo_bloqueo_git() {
                 esac
             done ;;
         config)
-            # Escribir o quitar core.hooksPath desactiva los hooks (solo vale el valor del proyecto)
+            # Escribir o quitar core.hooksPath desactiva los hooks (solo vale el valor del proyecto); un archivo
+            # incluido podría traer otro. Leer sí se puede.
+            # (get/list solo cuentan como subórdenes: en "git config core.hooksPath get", "get" es el valor)
+            case " ${a[*],,} " in *" --get "*|*" --get-all "*|*" --get-regexp "*|*" --list "*|*" -l "*) return 0 ;; esac
+            for x in "${a[@]}"; do
+                [[ "$x" == -* ]] && continue
+                [[ "${x,,}" == get || "${x,,}" == list ]] && return 0
+                break
+            done
             for (( j = 0; j < ${#a[@]}; j++ )); do
-                [[ "${a[j],,}" == core.hookspath ]] || continue
-                case " ${a[*],,} " in *" --get "*|*" --get-all "*|*" get "*|*" --list "*|*" -l "*) break ;; esac
+                _clave_salta_hooks "${a[j]}" || continue
+                if [[ "${a[j],,}" != core.hookspath ]]; then
+                    echo "Prohibido 'git config ${a[j]}': un archivo incluido puede cambiar core.hooksPath y saltarse los hooks."
+                    return 1
+                fi
                 if [[ "${a[j+1]:-}" != tools/hooks ]] || [[ " ${a[*],,} " == *" --unset"* ]]; then
                     echo "Prohibido cambiar core.hooksPath: los hooks del proyecto van en tools/hooks."
                     return 1
@@ -102,21 +172,69 @@ motivo_bloqueo_git() {
             done ;;
         reset)
             for x in "${a[@]}"; do
-                if [[ "$x" == --hard || "$x" == --merge || "$x" == --keep ]]; then
-                    echo "Prohibido 'git reset $x' en árbol compartido: borra cambios de otras sesiones."
-                    return 1
-                fi
-            done ;;
-        checkout|restore)
+                [[ "$x" == -- ]] && break
+                for m in --hard --merge --keep --soft; do
+                    if _opcion "$x" "$m"; then
+                        echo "Prohibido 'git reset $x' ($m) en árbol compartido: borra cambios o deshace commits de otras sesiones."
+                        return 1
+                    fi
+                done
+            done
+            # Sin rutas, "git reset <commit>" mueve la rama (también con un "--" sin nada detrás): deshace commits
+            # que pueden ser de otra sesión
+            for (( j = 0; j < ${#a[@]}; j++ )); do
+                x="${a[j]}"
+                if [[ "$x" == -- ]]; then (( j + 1 < ${#a[@]} )) && pos=(); break; fi
+                [[ "$x" == -* ]] || pos+=("$x")
+            done
+            if (( ${#pos[@]} == 1 )) && _mueve_head "${pos[0]}"; then
+                echo "Prohibido 'git reset ${pos[0]}' en árbol compartido: mueve la rama y deshace commits que pueden ser de otra sesión. Para sacar rutas del índice: git reset -- <rutas>."
+                return 1
+            fi ;;
+        checkout|restore|switch)
+            # -f / --discard-changes descartan los cambios de todo el árbol; una carpeta, "." o un comodín, los de
+            # todos los archivos que abarcan (también los de otras sesiones). "restore --staged" solo toca el índice.
+            local fuerza="" amplia="" staged=0 worktree=0 sep=0 valor=0
             for x in "${a[@]}"; do
-                if [[ "$x" == . || "$x" == ./ || "$x" == :/ || "$x" == '*' ]]; then
-                    echo "Prohibido 'git $sub ... $x': descarta cambios de otras sesiones. Restaura solo tus rutas."
-                    return 1
+                if (( valor )); then valor=0; continue; fi
+                if (( ! sep )); then
+                    case "$x" in
+                        --) sep=1; continue ;;
+                        --*)
+                            { _opcion "$x" --force || _opcion "$x" --discard-changes; } && fuerza="$x"
+                            _opcion "$x" --staged && staged=1
+                            _opcion "$x" --worktree && worktree=1
+                            [[ "$x" != *=* ]] && { _opcion "$x" --source || _opcion "$x" --orphan; } && valor=1
+                            continue ;;
+                        -?*)
+                            f="${x#-}"
+                            for (( j = 0; j < ${#f}; j++ )); do
+                                c="${f:j:1}"
+                                case "$c" in
+                                    f) fuerza="$x" ;;
+                                    S) staged=1 ;;
+                                    W) worktree=1 ;;
+                                    [bBcCs]) (( j + 1 == ${#f} )) && valor=1; break ;;  # llevan valor
+                                esac
+                            done
+                            continue ;;
+                    esac
                 fi
-            done ;;
+                [[ -z "$amplia" ]] && _ruta_amplia "$x" && amplia="$x"
+            done
+            if [[ -n "$fuerza" && "$sub" != restore ]]; then
+                echo "Prohibido 'git $sub $fuerza' en árbol compartido: descarta los cambios de otras sesiones."
+                return 1
+            fi
+            [[ "$sub" == switch ]] && return 0
+            [[ "$sub" == restore ]] && (( staged && ! worktree )) && return 0
+            if [[ -n "$amplia" ]]; then
+                echo "Prohibido 'git $sub ... $amplia': descarta los cambios de todo lo que abarca, también los de otras sesiones. Restaura solo tus archivos, uno a uno."
+                return 1
+            fi ;;
         clean)
             for x in "${a[@]}"; do
-                if [[ "$x" == --force || ( "$x" == -[!-]* && "$x" == *f* ) ]]; then
+                if _opcion "$x" --force || [[ "$x" == -[!-]* && "$x" == *f* ]]; then
                     echo "Prohibido 'git clean -f' en árbol compartido."
                     return 1
                 fi
@@ -202,9 +320,17 @@ segmentos_orden() { printf '%s' "$1" | LC_ALL=C awk "$_AWK_SEGMENTOS"; }
 
 _es_shell() { [[ "$1" =~ ^(ba|z|da|k)?sh(\.exe)?$ ]]; }
 
-# ¿Alguno de estos tokens escribe en el tablón? Redirecciones (>, >>, >|, 2>, con o sin espacio) y tee.
-_es_tablon() { local p="${1//\\//}"; [[ "${p##*/}" == tablon.md ]]; }
-_escribe_tablon() {
+# Archivos que no se escriben desde la terminal: imprime "tablon" (docs/direccion/tablon.md) o "gitconfig"
+# (.git/config o config.worktree, que pueden cambiar core.hooksPath).
+_protegido() {
+    local p="${1//\\//}"
+    if [[ "${p##*/}" == tablon.md ]]; then echo tablon; return 0; fi
+    [[ "$p" =~ (^|/)\.git/(worktrees/[^/]+/)?config(\.worktree)?$ ]] && { echo gitconfig; return 0; }
+    return 1
+}
+# ¿Alguno de estos tokens escribe en un archivo protegido? Redirecciones (>, >>, >|, 2>, con o sin espacio) y tee.
+# Imprime el tipo (ver _protegido).
+_escribe_protegido() {
     local -a t=("$@")
     local i x dest
     for (( i = 0; i < ${#t[@]}; i++ )); do
@@ -213,11 +339,22 @@ _escribe_tablon() {
         dest="${x##*>}"
         dest="${dest#|}"
         [[ -z "$dest" ]] && dest="${t[i+1]:-}"
-        _es_tablon "$dest" && return 0
+        _protegido "$dest" && return 0
     done
     if [[ "$(_basename_cmd "${t[0]:-}")" == tee ]]; then
-        for x in "${t[@]:1}"; do _es_tablon "$x" && return 0; done
+        for x in "${t[@]:1}"; do _protegido "$x" && return 0; done
     fi
+    return 1
+}
+
+# Variables de entorno con las que git lee otra configuración (y con ella otro core.hooksPath).
+# GIT_CONFIG_NOSYSTEM sí se permite: solo deja de leer la del sistema.
+_es_var_config_git() {
+    local v="$1"
+    [[ "${v,,}" == '$env:'* ]] && v="${v:5}"
+    case "${v^^}" in
+        GIT_CONFIG|GIT_CONFIG_COUNT|GIT_CONFIG_KEY_*|GIT_CONFIG_VALUE_*|GIT_CONFIG_PARAMETERS|GIT_CONFIG_GLOBAL|GIT_CONFIG_SYSTEM) return 0 ;;
+    esac
     return 1
 }
 
@@ -240,23 +377,40 @@ motivo_bloqueo_linea() {
         # Saltar prefijos: VAR=valor, &, exec, env, command...
         while (( k < n )); do
             case "${tok[k]}" in
-                GIT_CONFIG=*|GIT_CONFIG_COUNT=*|GIT_CONFIG_KEY_*=*|GIT_CONFIG_VALUE_*=*|GIT_CONFIG_PARAMETERS=*|GIT_CONFIG_GLOBAL=*|GIT_CONFIG_SYSTEM=*)
-                    # Configuración de git por entorno o en otro archivo: puede cambiar core.hooksPath
-                    echo "Prohibido '${tok[k]%%=*}=...' delante de una orden: puede saltarse los hooks del proyecto."
-                    return 1 ;;
-                *=*|'&'|'!'|'{'|exec|command|env|sudo|nohup|time|then|do|else) k=$((k + 1)) ;;
+                *=*)
+                    if _es_var_config_git "${tok[k]%%=*}"; then
+                        # Configuración de git por entorno o en otro archivo: puede cambiar core.hooksPath
+                        echo "Prohibido '${tok[k]%%=*}=...' delante de una orden: puede saltarse los hooks del proyecto."
+                        return 1
+                    fi
+                    k=$((k + 1)) ;;
+                '&'|'!'|'{'|exec|command|env|sudo|nohup|time|then|do|else) k=$((k + 1)) ;;
                 *) break ;;
             esac
         done
         (( k < n )) || continue
-        local cmd="${tok[k]}" base
+        local cmd="${tok[k]}" base protegido x
         base="$(_basename_cmd "$cmd")"
-        if _escribe_tablon "${tok[@]:k}" || _escribe_tablon "${tok[@]:0:k}"; then
-            echo "Prohibido escribir en el tablón desde la terminal. Usa ./tools/hooks/entregar.sh <rol> \"<qué>\" \"<ruta o commit>\" <destino> [-- <rutas>] (pone la hora real y commitea tu fila con tus rutas)."
+        # export/declare GIT_CONFIG_*=... (o $env:GIT_CONFIG_COUNT = 1 en PowerShell) sirve para todas las órdenes siguientes
+        if [[ "$base" == export || "$base" == declare || "$base" == typeset || "$base" == readonly || "$base" == local \
+            || "${cmd,,}" == '$env:'* ]]; then
+            for x in "${tok[@]:k}"; do
+                if _es_var_config_git "${x%%=*}"; then
+                    echo "Prohibido '${x%%=*}' en el entorno: git leería otra configuración y podría saltarse los hooks del proyecto."
+                    return 1
+                fi
+            done
+        fi
+        if protegido="$(_escribe_protegido "${tok[@]:k}" || _escribe_protegido "${tok[@]:0:k}")"; then
+            if [[ "$protegido" == gitconfig ]]; then
+                echo "Prohibido escribir en la configuración de git desde la terminal: podría cambiar core.hooksPath y saltarse los hooks del proyecto."
+            else
+                echo "Prohibido escribir en el tablón desde la terminal. Usa ./tools/hooks/entregar.sh <rol> \"<qué>\" \"<ruta o commit>\" <destino> [-- <rutas>] (pone la hora real y commitea tu fila con tus rutas)."
+            fi
             return 1
         elif [[ "$base" == git || "$base" == git.exe || "$base" == git_guard.sh ]]; then
             motivo_bloqueo_git "${tok[@]:k+1}" || return 1
-        elif _es_motor "$cmd"; then
+        elif _es_motor "$cmd" || { x="$(_app_lanzada "${tok[@]:k}")"; [[ -n "$x" ]] && _es_motor "$x"; }; then
             echo "Prohibido lanzar el motor directamente. Usa ./tools/motor_silencioso.sh <rol> ... (sin sonido y con candado)."
             return 1
         elif [[ "$base" == with_lock.sh ]] && _es_motor "${tok[k+3]:-}"; then

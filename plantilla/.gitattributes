@@ -1,0 +1,6 @@
+# Atributos de git (DUEÑO: arquitecto-sistemas). Las reglas de Git LFS (texturas, audio...) se añaden debajo.
+# Scripts siempre con finales de línea LF: con CRLF (core.autocrlf en Windows) bash falla ("$'\r': command not found")
+# y las guardas dejan de funcionar al clonar o al traer cambios. tools/hooks/tests/prueba_guardas.sh lo comprueba.
+*.sh text eol=lf
+tools/hooks/pre-commit text eol=lf
+tools/hooks/commit-msg text eol=lf

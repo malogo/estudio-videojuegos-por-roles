@@ -11,7 +11,7 @@
   "RAMA_PRINCIPAL": "main",
   "ROLES": ["coordinador", "arquitecto-sistemas", "especialista-escenas-ui", "director-arte", "auditor-calidad"],
   "BINARIO_MOTOR": "godot",
-  "REGEX_BINARIO_MOTOR": "^godot(4|[._-]v?[0-9].*)?(\\.exe)?$|^godot_v[0-9]",
+  "REGEX_BINARIO_MOTOR": "^godot(4|sharp|[._-]v?[0-9].*)?(\\.exe)?$|^godot_v[0-9]",
   "ARGS_MOTOR_SILENCIOSO": "--audio-driver Dummy",
   "ARG_RUTA_PROYECTO": "--path",
   "REGEX_ERRORES_MOTOR": "^(USER )?(SCRIPT )?ERROR:",

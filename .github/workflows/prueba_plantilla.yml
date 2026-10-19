@@ -1,6 +1,7 @@
-# Despliega la plantilla con los valores de ejemplo de Godot y de Unity y pasa las pruebas de las guardas
-# (tools/hooks/tests/prueba_guardas.sh, con motor falso: no hace falta ningún motor) y shellcheck.
-# Evita regresiones de la plantilla. Tarda alrededor de un minuto por motor.
+# Despliega la plantilla con los valores de ejemplo de Godot y de Unity, como dice desplegar.md (pasos 4 y 7 a 10), y
+# pasa las pruebas de las guardas (tools/hooks/tests/prueba_guardas.sh, con motor falso: no hace falta ningún motor),
+# la auditoría de proceso y shellcheck. En Linux, macOS (BSD date, bash de Homebrew) y Windows (Git Bash).
+# Evita regresiones de la plantilla. Tarda unos minutos por combinación.
 name: Prueba de la plantilla
 
 on:
@@ -10,25 +11,38 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   prueba:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.so }}
     strategy:
       fail-fast: false
       matrix:
+        so: [ubuntu-latest, macos-latest, windows-latest]
         motor: [godot, unity]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Desplegar la plantilla (${{ matrix.motor }})
+      - name: bash 4 o posterior (macOS trae 3.2)
+        if: runner.os == 'macOS'
+        run: |
+          brew install bash
+          bash -c 'echo "bash $BASH_VERSION en $BASH"; (( BASH_VERSINFO[0] >= 4 ))'
+
+      - name: Desplegar la plantilla (${{ matrix.motor }}), pasos 4 y 7 de desplegar.md
         run: |
           D="$RUNNER_TEMP/despliegue"
           mkdir -p "$D"
-          python3 rellenar_plantilla.py --valores "ejemplo_valores_${{ matrix.motor }}_pc.json" --destino "$D"
+          ${{ runner.os == 'Windows' && 'python' || 'python3' }} rellenar_plantilla.py \
+            --valores "ejemplo_valores_${{ matrix.motor }}_pc.json" --destino "$D"
           cd "$D"
           git init -q -b main .
           git config user.name prueba && git config user.email prueba@example.invalid
-          git add -- CLAUDE.md .gitignore .claude docs tools
+          git add -- CLAUDE.md .gitignore .gitattributes .claude docs tools
+          git add --chmod=+x -- $(grep -l '^#!' $(git ls-files -- tools))
           git commit -q -m "coordinador: despliegue"
           echo "DESPLIEGUE=$D" >> "$GITHUB_ENV"
 
@@ -43,6 +57,34 @@ jobs:
         working-directory: ${{ env.DESPLIEGUE }}
         run: ./tools/hooks/tests/prueba_guardas.sh
 
+      - name: Pasos 8 a 10 de desplegar.md (hooks, primera fila, excepción y auditoría sin hallazgos)
+        working-directory: ${{ env.DESPLIEGUE }}
+        run: |
+          ./tools/hooks/arranque_rol.sh coordinador > /dev/null
+          ./tools/hooks/entregar.sh coordinador "Despliegue inicial del sistema; primer lote A1 en el plan" \
+            docs/direccion/plan_nocturno.md arquitecto-sistemas
+          printf '# Commits que la comprobación 2 no revisa (hash y motivo)\n%s despliegue inicial\n' \
+            "$(git rev-list --max-parents=0 HEAD)" > tools/auditoria/excepciones_proceso.txt
+          ./tools/hooks/entregar.sh auditor-calidad "Excepción del commit de despliegue" tools/auditoria/excepciones_proceso.txt \
+            coordinador -- tools/auditoria/excepciones_proceso.txt
+          ./tools/auditoria/auditoria_proceso.sh
+          if git status --short | grep -v '^?? docs/calidad/'; then echo "::error::El árbol no quedó limpio"; exit 1; fi
+
+      - name: Con bash 3.2 las guardas fallan cerradas y los avisos no bloquean (macOS)
+        if: runner.os == 'macOS'
+        working-directory: ${{ env.DESPLIEGUE }}
+        run: |
+          E="$RUNNER_TEMP/err.txt"
+          set +e
+          printf '{"session_id":"S","tool_input":{"command":"ls"}}' | /bin/bash tools/hooks/pre_tool_guard.sh 2> "$E"
+          R=$?; cat "$E"
+          [[ $R == 2 ]] && grep -q "bash 4" "$E" || { echo "::error::pre_tool_guard.sh no bloqueó con bash 3.2 (código $R)"; exit 1; }
+          printf '{"session_id":"S","tool_input":{"file_path":"CLAUDE.md"}}' | /bin/bash tools/hooks/guard_propiedad.sh 2> "$E"
+          R=$?; [[ $R == 2 ]] || { echo "::error::guard_propiedad.sh no bloqueó con bash 3.2 (código $R)"; exit 1; }
+          printf '{"session_id":"S","prompt":"x"}' | /bin/bash tools/hooks/aviso_contexto.sh
+          R=$?; [[ $R == 0 ]] || { echo "::error::aviso_contexto.sh bloquearía el mensaje con bash 3.2 (código $R)"; exit 1; }
+
       - name: shellcheck
+        if: runner.os == 'Linux'
         working-directory: ${{ env.DESPLIEGUE }}
         run: shellcheck -x -S warning $(find tools -name '*.sh') tools/hooks/pre-commit tools/hooks/commit-msg

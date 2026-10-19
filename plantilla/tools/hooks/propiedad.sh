@@ -5,6 +5,10 @@
 #      rol_valido "arquitecto-sistemas" && echo sí
 #      rol=$(rol_de_sesion "<session_id>" "<agent_id>")       # rol declarado con fijar_rol.sh (o $CLAUDE_ROL)
 #      desde=$(ultimo_vaciado docs/direccion/roles/memoria_<rol>.md)   # "YYYY-MM-DD HH:MM"; falla si no se puede leer
+#      s=$(fecha_a_epoch "2026-10-18 22:17")   f=$(epoch_a_fecha "$s" +%Y-%m-%d)   # GNU date o BSD date (macOS)
+
+# shellcheck source=requisitos.sh
+source "$(dirname "${BASH_SOURCE[0]}")/requisitos.sh"
 
 PROPIEDAD_TSV="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/propiedad.tsv"
 # Roles del proyecto (cada uno con su ficha docs/direccion/roles/<rol>.md). Los tres primeros son obligatorios.
@@ -100,6 +104,20 @@ ultimo_vaciado() {
     [[ "$linea" =~ Último\ vaciado:\*{0,2}[[:space:]]*([0-9]{4}-[0-9]{2}-[0-9]{2})([[:space:]]+([0-9]{1,2}:[0-9]{2}))? ]] || return 1
     fecha="${BASH_REMATCH[1]}" hora="${BASH_REMATCH[3]:-00:00}"
     (( ${#hora} == 4 )) && hora="0$hora"
-    date -d "$fecha $hora" +%s >/dev/null 2>&1 || return 1
+    fecha_a_epoch "$fecha $hora" >/dev/null || return 1
     printf '%s %s' "$fecha" "$hora"
 }
+
+# "YYYY-MM-DD HH:MM" (hora de $TZ, o local) -> segundos desde 1970; falla si esa fecha u hora no existe
+# (2026-02-30, la hora que se salta el cambio de horario...). "date -d" es de GNU (Linux, Git Bash); macOS tiene
+# BSD date, que en vez de rechazar una fecha imposible la corre al día siguiente: por eso se comprueba la vuelta.
+fecha_a_epoch() {
+    local s
+    if s="$(date -d "$1" +%s 2>/dev/null)"; then printf '%s' "$s"; return 0; fi
+    s="$(date -j -f '%Y-%m-%d %H:%M:%S' "$1:00" +%s 2>/dev/null)" || return 1
+    [[ "$(date -r "$s" '+%Y-%m-%d %H:%M' 2>/dev/null)" == "$1" ]] || return 1
+    printf '%s' "$s"
+}
+
+# Segundos desde 1970 -> fecha con el formato de date que se pase ("+%Y-%m-%d"...), en $TZ o local.
+epoch_a_fecha() { date -d "@$1" "$2" 2>/dev/null || date -r "$1" "$2" 2>/dev/null; }

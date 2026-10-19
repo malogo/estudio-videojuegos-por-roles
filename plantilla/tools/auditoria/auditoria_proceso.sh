@@ -25,7 +25,12 @@ set -uo pipefail
 # como "Europe/Madrid" caería a UTC (informe con la hora mal).
 TZ_EQUIPO="{{ZONA_HORARIA_POSIX}}"
 export TZ="${AUDITORIA_TZ:-$TZ_EQUIPO}"
-export LC_ALL=C.UTF-8 2>/dev/null || true
+# Locale UTF-8 para contar caracteres (no bytes) en rutas y textos con tildes. macOS no tiene C.UTF-8.
+LOCALE_UTF8=C.UTF-8
+if command -v locale >/dev/null 2>&1; then
+    LOCALE_UTF8="$(locale -a 2>/dev/null | grep -ixE 'c\.utf-?8|en_US\.utf-?8' | head -n1 || true)"
+fi
+[[ -n "$LOCALE_UTF8" ]] && export LC_ALL="$LOCALE_UTF8"
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 AHORA_TXT=""
@@ -41,12 +46,15 @@ while (( $# )); do
     esac
 done
 RAIZ="$(cd "$RAIZ" && pwd)" || exit 2
+# Roles y fechas portables (fecha_a_epoch, epoch_a_fecha: GNU date o BSD date)
+# shellcheck source=../hooks/propiedad.sh
+source "$RAIZ/tools/hooks/propiedad.sh"
 if [[ -n "$AHORA_TXT" ]]; then
-    AHORA=$(date -d "$AHORA_TXT" +%s 2>/dev/null) || { echo "--ahora inválido: $AHORA_TXT" >&2; exit 2; }
+    AHORA=$(fecha_a_epoch "$AHORA_TXT") || { echo "--ahora inválido (formato \"YYYY-MM-DD HH:MM\"): $AHORA_TXT" >&2; exit 2; }
 else
     AHORA=$(date +%s)
 fi
-FECHA=$(date -d "@$AHORA" +%Y-%m-%d)
+FECHA=$(epoch_a_fecha "$AHORA" +%Y-%m-%d)
 INFORME="${INFORME:-$RAIZ/docs/calidad/auditoria_proceso_${FECHA}.md}"
 EXCEPCIONES="${EXCEPCIONES:-$RAIZ/tools/auditoria/excepciones_proceso.txt}"
 
@@ -54,8 +62,6 @@ TABLON="$RAIZ/docs/direccion/tablon.md"
 PLAN="$RAIZ/docs/direccion/plan_nocturno.md"
 PENDIENTES="$RAIZ/docs/direccion/pendientes_manana.md"
 FICHAS="$RAIZ/docs/direccion/roles"
-# shellcheck source=../hooks/propiedad.sh
-source "$RAIZ/tools/hooks/propiedad.sh"
 ROLES=("${ROLES_VALIDOS[@]}")
 DESTINOS_EXTRA=("persona responsable" "persona-responsable")
 
@@ -85,7 +91,7 @@ while IFS= read -r LINEA; do
         continue
     fi
     HORA="${BASH_REMATCH[1]}"; ORIGEN="$(recortar "${BASH_REMATCH[2]}")"; DESTINO="$(recortar "${BASH_REMATCH[5]}")"
-    date -d "$HORA" +%s >/dev/null 2>&1 || anotar 1 "línea $N: fecha/hora inexistente \`$HORA\`"
+    fecha_a_epoch "$HORA" >/dev/null || anotar 1 "línea $N: fecha/hora inexistente \`$HORA\`"
     es_rol "$ORIGEN" || anotar 1 "línea $N: origen no es un rol válido \`$ORIGEN\`"
     es_destino "$DESTINO" || anotar 1 "línea $N: destino no es un rol válido \`$DESTINO\`"
 done < <(leer "$TABLON")
@@ -144,7 +150,7 @@ if git -C "$RAIZ" rev-parse --git-dir >/dev/null 2>&1; then
         [[ "$LINEA" == "docs/direccion/tablon.md" ]] && continue
         DUENOS="$(duenos_de "$LINEA")"
         [[ -z "$DUENOS" ]] && continue
-        grep -qx "$AUTOR" <<< "$DUENOS" || anotar 2 "commit ${HASH:0:7} (\`$AUTOR\`) toca \`$LINEA\`, de $(paste -sd, <<< "$DUENOS")"
+        grep -qx "$AUTOR" <<< "$DUENOS" || anotar 2 "commit ${HASH:0:7} (\`$AUTOR\`) toca \`$LINEA\`, de $(paste -sd, - <<< "$DUENOS")"
     done < <(git -C "$RAIZ" log HEAD --no-merges --format=$'%x1e%H%x1f%ct%x1f%s' --name-only -n 500 2>/dev/null)
 else
     anotar 2 "\`$RAIZ\` no es un repositorio git; no se pueden revisar commits"
@@ -212,7 +218,7 @@ ENTRADA=""; N=0; NE=0
 cerrar_entrada() {
     [[ -z "$ENTRADA" ]] && return
     local marca
-    marca=$(date -d "${ENTRADA:0:16}" +%s 2>/dev/null || echo "$AHORA")
+    marca=$(fecha_a_epoch "${ENTRADA:0:16}" || echo "$AHORA")
     (( marca < LIMITE )) && anotar 5 "línea $NE abierta desde ${ENTRADA:0:16}: \`$(cut -d'|' -f3 <<< "$ENTRADA" | cut -c2-90)\`"
     ENTRADA=""
 }
@@ -236,7 +242,7 @@ TITULOS=(""
 mkdir -p "$(dirname "$INFORME")"
 {
     echo "# Auditoría de proceso — $FECHA"
-    echo "Generado por \`tools/auditoria/auditoria_proceso.sh\` (auditor-calidad) a las $(date -d "@$AHORA" '+%Y-%m-%d %H:%M') sobre \`$(git -C "$RAIZ" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')\` @ \`$(git -C "$RAIZ" rev-parse --short HEAD 2>/dev/null || echo '?')\`."
+    echo "Generado por \`tools/auditoria/auditoria_proceso.sh\` (auditor-calidad) a las $(epoch_a_fecha "$AHORA" '+%Y-%m-%d %H:%M') sobre \`$(git -C "$RAIZ" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')\` @ \`$(git -C "$RAIZ" rev-parse --short HEAD 2>/dev/null || echo '?')\`."
     echo
     echo "**Resultado:** $( (( TOTAL == 0 )) && echo 'OK, sin hallazgos' || echo "$TOTAL hallazgo(s)")"
     echo

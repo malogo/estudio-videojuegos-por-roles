@@ -219,6 +219,16 @@ tú copies nada. En una terminal funciona igual, pero los avisos los escribes t�
     coordinador. Él revisa el PR y, solo si se lo pides, lo fusiona y pasa al tablón la
     línea que dejó la nube (volcar_entregas_nube.sh).
 
+6.9 Más de dos sesiones a la vez: modo worktree (opcional)
+  - Por defecto todas las ventanas comparten la misma carpeta y la misma rama. Con más de
+    2 sesiones trabajando a la vez, cada una puede ir en su propia carpeta y rama con
+    "git worktree add ../juego-<rol> -b <rol>/<lote>" y entregar como la nube: con
+    --nube <lote> (la línea va a entregas_nube/) y el coordinador fusiona y vuelca.
+  - Los hooks ya funcionan en worktrees y los candados quedan por carpeta, que es lo
+    correcto: cada worktree tiene su propia caché del motor.
+  - Coste: una caché por worktree (Godot reimporta; en Unity, regenerar Library/ puede
+    llevar mucho tiempo y espacio) y más fusiones. Por eso no es el modo por defecto.
+
 
 7. QUÉ CAMBIA SEGÚN PLATAFORMA Y MOTOR, Y QUÉ ES COMÚN
 ------------------------------------------------------
@@ -252,6 +262,7 @@ Cambia según la plataforma:
 - La guarda de edición no ve lo que se escribe con órdenes de terminal (copiar, redirigir);
   eso lo para el hook commit-msg al guardar.
 - El rol lo declara la propia sesión: el sistema evita despistes, no engaños deliberados.
+- Con más de 2 sesiones a la vez, el árbol compartido se vuelve estrecho: ver 6.9 (worktrees).
 - Candados: con la orden "flock" (Linux) los da el sistema operativo y se sueltan solos. Sin
   ella (Git Bash en Windows, macOS sin "brew install flock") se usa un archivo con el PID: si
   ese PID lo reutiliza otro proceso, en Linux y macOS se detecta por su hora de arranque; en

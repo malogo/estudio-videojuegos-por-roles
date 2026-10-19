@@ -50,6 +50,24 @@ Estimaciones de esfuerzo orientativas (trabajo del agente, con pruebas). Una fas
    hereda el descriptor del candado (`lsof tools/locks/motor.lock` tras salir).
 3. Godot: ya verificado con 4.7.2 (códigos de salida y `.uid`). Repetir solo si cambia la versión objetivo.
 
+#### Resultados de la fase 0 (2026-10-19)
+- **Git para Windows no trae `flock`.** Última versión publicada: `v2.56.0.windows.2`. Descargados y listados
+  `MinGit-2.56.0.2-64-bit.zip` (132 `.exe`; ni siquiera trae `bash.exe`, solo `sh.exe`/`dash.exe`, así que no sirve
+  para estos hooks) y `PortableGit-2.56.0.2-64-bit.7z.exe` (mismo contenido que el instalador, 9.624 archivos):
+  **no hay `flock.exe`** en ninguno. Sí hay `bash.exe`, `ps.exe`, `kill.exe`, `stat.exe` (GNU), `timeout.exe`,
+  `realpath.exe`, `od.exe` y la base de zonas en `ucrt64/share/zoneinfo` (no en `/usr/share/zoneinfo`).
+  El `ps` de MSYS no admite `-o`, así que en Windows no se puede saber cuándo arrancó un PID: queda la heurística
+  por antigüedad del candado (`CANDADO_MAX_HORAS`).
+- **macOS:** sin `flock` de serie (`brew install flock` lo añade); `ps -o etime=` sí existe (`etimes` no, por eso se usa
+  `etime` y se convierte a segundos); `stat` es el de BSD (`stat -f %m`).
+- **Conclusión:** el plan B **es crítico, no residual**: es el modo normal en Windows (Git Bash) y en macOS sin
+  Homebrew. Se implementa con el mismo cuidado que el modo `flock` y con sus propias pruebas (`CANDADO_MODO=pid`).
+- **Unity: no verificado** (no hay licencia ni binario en este entorno). Quedan abiertas: qué archivos versionados toca
+  `-batchmode -nographics -quit`, si `-logFile -` saca el log por la salida estándar en Windows (la documentación de
+  Unity dice que sí) y si el cliente de licencias que queda vivo hereda el descriptor del candado. Mitigación ya
+  prevista en el diseño: `CANDADO_HEREDA=0` y patrón de errores afinable con `ruido_motor.txt`.
+- **Godot:** no cambia la versión objetivo (4.7.2); no se repite.
+
 ### Fase 1 — Candado robusto · P0 · ≈2-3 h
 **Archivos:** `plantilla/tools/locks/with_lock.sh`, `plantilla/tools/auditoria/auditoria_proceso.sh` (§3),
 `plantilla/.gitignore` (comentario), `normas_comunes.md` §5 ("candado PID" → "candado"), `readme.txt` §2/§8, pruebas.

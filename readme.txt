@@ -116,36 +116,98 @@ tools/auditoria/auditoria_proceso.sh  Revisión del proceso que hace el auditor.
 4. Contesta las preguntas (cada una trae un valor por defecto; si dudas, acéptalo).
 5. La sesión rellena la plantilla, crea los archivos, activa los hooks, escribe la primera
    línea del tablón y comprueba que todo funciona. Al terminar te dice el resultado.
-6. Cierra esa sesión. Desde ahora cada sesión nueva tiene un rol (sección 6).
+6. Cierra esa sesión: Claude Code solo carga CLAUDE.md y los hooks al abrir una sesión.
+   Desde ahora cada ventana tiene un rol fijo (sección 6).
 
 Requisitos: git, bash (en Windows, Git Bash) y Python 3.
 
 
-6. USO DIARIO
--------------
-Abrir un rol:
-  Abre una sesión nueva y escribe, por ejemplo: "Eres coordinador". La sesión ejecuta
-  ./tools/hooks/arranque_rol.sh coordinador, que le enseña su ficha, su memoria y solo
-  sus líneas nuevas del tablón. Una sesión = un rol; no cambies de rol a mitad.
-Empezar: abre primero el coordinador, cuéntale qué quieres y pídele que escriba la
-  especificación y el primer plan.
-Despertar a otro rol:
-  El rol que entrega añade su línea al tablón dirigida al otro. Tú abres (o vuelves a) la
-  sesión de ese rol y le dices: "Tienes trabajo en el tablón".
-Lanzar una ronda:
-  Pide al coordinador "lanza la ronda N". Él marca los lotes en el plan y te dice qué
-  sesiones abrir y con qué frase. No abras más sesiones a la vez que las que diga el plan.
-Vaciar una sesión (cuando avisa de que está llena, ~250.000 "tokens"):
-  Dile "vuelca tu memoria y prepárate para vaciar". Escribe su memoria y la guarda. Luego
-  cierras la sesión y abres otra con el mismo rol. El coordinador nunca se vacía solo: te
-  avisa y lo vacías tú.
-Decisiones:
-  Revisa de vez en cuando docs/direccion/pendientes_manana.md y responde a las preguntas.
-Trabajar con la nube:
-  Pide al coordinador el encargo para la nube; pégalo en una sesión de Claude Code en la
-  web con el repositorio conectado. Al terminar abre un PR. Lo revisas y lo aceptas
-  (merge); luego dile al coordinador "vuelca las entregas de la nube" y pégale el informe
-  del PR (la nube no puede escribir a tus otras sesiones).
+6. CÓMO SE TRABAJA EN EL DÍA A DÍA
+---------------------------------
+Lo más cómodo es la aplicación de escritorio de Claude (pestaña Code): ahí varias sesiones
+del mismo ordenador pueden mandarse mensajes, y el coordinador despierta a los demás sin que
+tú copies nada. En una terminal funciona igual, pero los avisos los escribes tú.
+
+6.1 Una ventana fija por rol
+  - Abre UNA sesión por rol, todas en la carpeta del juego, y ponle de nombre su rol
+    (Coordinador, Arquitecto sistemas, Auditor calidad...). Esas ventanas no se cierran:
+    se reutilizan durante todo el proyecto. Una ventana = un rol; nunca cambia de rol.
+  - La primera vez escribe en cada una:
+        Eres <rol>. Lee tu ficha y no hagas nada más.
+    La sesión ejecuta ./tools/hooks/arranque_rol.sh <rol>, lee su ficha, su memoria y sus
+    líneas del tablón, y se queda esperando.
+  - Elige en cada ventana el modelo y el esfuerzo (la app los deja fijar por sesión). Los
+    especialistas casi siempre van bien con esfuerzo medio o alto; el coordinador, alto.
+  - Abre primero el coordinador, cuéntale qué juego quieres y pídele la especificación y
+    el primer plan. Las demás ventanas pueden esperar hasta que les toque.
+
+6.2 El ciclo de un lote (lo que pasa cada vez)
+  1. Pides al coordinador: "lanza la ronda N" (o "encarga X a <rol>").
+  2. El coordinador escribe la línea en el tablón dirigida a ese rol y le manda a su
+     ventana el aviso "Tienes trabajo en el tablón". (Si la ventana se limpió antes, ver
+     6.3: el aviso debe llevar también el rol.) En la terminal, ese aviso lo pegas tú.
+     La primera vez, la app puede pedirte en la ventana de destino que aceptes el mensaje.
+  3. El especialista trabaja: hace el lote, pasa sus pruebas, guarda (commit) solo sus
+     archivos y deja en el tablón su línea de entrega dirigida al siguiente (auditor o
+     coordinador).
+  4. Si la entrega va al auditor, el coordinador lo despierta igual; el auditor prueba y
+     acepta o devuelve el lote al dueño. Nada te llega sin pasar por él.
+  5. Al acabar, el especialista actualiza su memoria (qué hizo, qué descartó, dónde se
+     queda) y la guarda. Avisas al coordinador ("ya acabó X") y él revisa, actualiza el
+     plan y te dice qué sigue.
+  6. Limpias la ventana del especialista (6.3) y queda lista para el próximo lote.
+
+6.3 Limpiar una ventana: /clear
+  - Cuando un especialista termina su lote y ha guardado su memoria, escribe /clear en su
+    ventana. La conversación se vacía, pero la ventana conserva su nombre, carpeta, modelo
+    y permisos. Así cada lote empieza con poco contexto: va más rápido y gasta menos.
+  - Tras un /clear la sesión ya no sabe qué rol es. El siguiente aviso tiene que decirlo:
+        Eres <rol>. Tienes trabajo en el tablón.
+    Con eso vuelve a arrancar su rol, lee su memoria y solo las líneas nuevas del tablón.
+    Dile al coordinador cuándo has limpiado una ventana, para que mande el aviso completo.
+  - No hagas /clear mientras le está llegando un mensaje a esa ventana: el mensaje se pierde
+    y hay que reenviarlo.
+  - Si vienen varios lotes seguidos del mismo tema, puedes no limpiar entre ellos: no
+    vuelve a leerlo todo, a cambio de que el contexto crezca.
+  - Si una ventana se llena a mitad de un lote (~250.000 "tokens"), dile "vuelca tu memoria
+    y prepárate para vaciar"; cuando la haya guardado, /clear y el aviso con el rol.
+
+6.4 El coordinador es la excepción
+  - Es la ventana larga: lleva el hilo de todo y habla contigo. Nunca se limpia solo; te
+    avisa cuando conviene y mantiene al día su memoria (memoria_coordinador.md).
+  - Cuando se alargue, mejor /compact (resume la conversación y sigue) que /clear. Si un día
+    lo limpias, pídele antes que actualice su memoria y luego escribe "Eres coordinador".
+  - Es quien decide qué ventana despertar y cuándo; tú solo le dices qué quieres y
+    contestas sus preguntas.
+
+6.5 Lo que haces tú y lo que hace el coordinador
+  Tú: pides rondas o tareas, contestas pendientes_manana.md, limpias ventanas con /clear,
+      eliges modelo y esfuerzo, aceptas avisos de la app y decides cada merge y cada compra.
+  Coordinador: reparte lotes en el tablón, despierta roles, revisa entregas y PR, pasa la
+      auditoría, actualiza plan, pendientes y su memoria, y sube los cambios cuando lo pides.
+  Especialistas: hacen su lote, solo en sus archivos, y lo entregan por el tablón.
+
+6.6 Rondas
+  Pide al coordinador "lanza la ronda N". Él marca los lotes en el plan y despierta solo las
+  ventanas que tocan, sin poner a dos roles sobre los mismos archivos. Las rondas solo se
+  lanzan cuando tú lo pides; mientras tanto, las ventanas esperan.
+
+6.7 Decisiones
+  Lo que no está en la especificación (alcance, normas nuevas, compras, publicación) nunca
+  lo decide una sesión: va a docs/direccion/pendientes_manana.md con una recomendación.
+  Revísalo de vez en cuando y contesta allí o al coordinador.
+
+6.8 Sesión en la nube (opcional)
+  - Una sesión de Claude Code en la web, con el repositorio conectado, trabaja en su propia
+    rama y abre un PR. Se usa para lotes largos que no necesitan tu ordenador.
+  - Mantén una sola ventana de nube y límpiala con /clear entre lotes. Por eso cada encargo
+    que le llega va completo (rol, normas y criterio de hecho): no recuerda nada.
+  - Antes de enviar, el coordinador te dice el esfuerzo recomendado; tú lo fijas en la
+    sesión y le confirmas. Si la app tiene Remote Control activo, el coordinador le envía el
+    encargo directamente; si no, te lo da y lo pegas tú.
+  - La nube no puede escribir a tus otras ventanas: cuando acaba, pega su informe al
+    coordinador. Él revisa el PR y, solo si se lo pides, lo fusiona y pasa al tablón la
+    línea que dejó la nube (volcar_entregas_nube.sh).
 
 
 7. QUÉ CAMBIA SEGÚN PLATAFORMA Y MOTOR, Y QUÉ ES COMÚN

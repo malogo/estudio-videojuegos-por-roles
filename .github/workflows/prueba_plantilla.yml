@@ -70,6 +70,53 @@ jobs:
           ./tools/auditoria/auditoria_proceso.sh
           if git status --short | grep -v '^?? docs/calidad/'; then echo "::error::El árbol no quedó limpio"; exit 1; fi
 
+      - name: Los tres niveles de autonomía (Godot con bajo, medio y alto; valor inválido rechazado)
+        if: runner.os == 'Linux' && matrix.motor == 'godot'
+        run: |
+          # nivel <nivel> <json>: valores de ejemplo de Godot con otro NIVEL_AUTONOMIA
+          nivel() { python3 -c 'import json, sys; v = json.load(open("ejemplo_valores_godot_pc.json")); v["NIVEL_AUTONOMIA"] = sys.argv[1]; json.dump(v, open(sys.argv[2], "w"))' "$1" "$2"; }
+          for N in bajo medio alto; do
+            echo "== Nivel $N"
+            nivel "$N" "$RUNNER_TEMP/valores_$N.json"
+            D="$RUNNER_TEMP/nivel_$N" P="$RUNNER_TEMP/puerta_$N.txt"
+            python3 rellenar_plantilla.py --valores "$RUNNER_TEMP/valores_$N.json" --destino "$D" > /dev/null
+            cd "$D"
+            git init -q -b main .
+            git config user.name prueba && git config user.email prueba@example.invalid
+            git add -- CLAUDE.md .gitignore .gitattributes .claude docs tools
+            git add --chmod=+x -- $(grep -l '^#!' $(git ls-files -- tools))
+            git commit -q -m "coordinador: despliegue"
+            if grep -rn "{{" CLAUDE.md docs tools .claude | grep -v "{{COMPLETAR[:}]"; then
+              echo "::error::[$N] Quedan marcadores sin rellenar"; exit 1
+            fi
+            grep -q "^## 9\. Nivel de autonomía (\`$N\`)" docs/direccion/normas_comunes.md \
+              || { echo "::error::[$N] La cabecera de normas §9 no dice el nivel"; exit 1; }
+            for O in bajo medio alto; do
+              [[ "$O" == "$N" ]] && continue
+              if grep -rn "Nivel \`$O\`" CLAUDE.md docs; then echo "::error::[$N] Aparece el texto del nivel $O"; exit 1; fi
+            done
+            R=0; ./tools/auditoria/preparacion_ronda.sh 1 > "$P" || R=$?
+            cat "$P"
+            [[ $R == 1 ]] || { echo "::error::[$N] preparacion_ronda.sh 1 salió con $R (se esperaba 1: el lote A1 lleva '...')"; exit 1; }
+            grep -q "lote A1 con el comando" "$P" || { echo "::error::[$N] La puerta no señala el comando de A1"; exit 1; }
+            if [[ "$N" != bajo ]] && ! grep -q "especificaciones.md" "$P"; then
+              echo "::error::[$N] La puerta no nombra la especificación"; exit 1
+            fi
+            ./tools/hooks/arranque_rol.sh coordinador > /dev/null
+            ./tools/hooks/entregar.sh coordinador "Despliegue inicial del sistema; primer lote A1 en el plan" \
+              docs/direccion/plan_nocturno.md arquitecto-sistemas
+            printf '# Commits que la comprobación 2 no revisa (hash y motivo)\n%s despliegue inicial\n' \
+              "$(git rev-list --max-parents=0 HEAD)" > tools/auditoria/excepciones_proceso.txt
+            ./tools/hooks/entregar.sh auditor-calidad "Excepción del commit de despliegue" tools/auditoria/excepciones_proceso.txt \
+              coordinador -- tools/auditoria/excepciones_proceso.txt
+            ./tools/auditoria/auditoria_proceso.sh
+            cd "$GITHUB_WORKSPACE"
+          done
+          nivel altisimo "$RUNNER_TEMP/valores_mal.json"
+          if python3 rellenar_plantilla.py --valores "$RUNNER_TEMP/valores_mal.json" --destino "$RUNNER_TEMP/nivel_mal"; then
+            echo "::error::NIVEL_AUTONOMIA=altisimo no hizo fallar rellenar_plantilla.py"; exit 1
+          fi
+
       - name: Un clon con core.autocrlf deja los scripts en LF (.gitattributes, Windows)
         if: runner.os == 'Windows'
         run: |

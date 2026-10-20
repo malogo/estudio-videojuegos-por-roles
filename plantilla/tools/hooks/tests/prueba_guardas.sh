@@ -435,5 +435,77 @@ N_LOGS=$(find .motor_logs -name '*.log' | wc -l | tr -d ' ')
 if (( N_LOGS == 30 )); then ok "se guardan los 30 últimos logs"; else : > "$TMP/salida"; mal "se guardan $N_LOGS logs (se esperaban 30)"; fi
 unset MOTOR_BIN MOTOR_REGEX_ERRORES
 
+echo "== Preparación de rondas (preparacion_ronda.sh) y su parte de la auditoría"
+# Especificación y plan sintéticos en otro repo temporal (sin tocar el proyecto)
+mkdir -p "$TMP/ronda/docs/direccion" && cd "$TMP/ronda" || exit 1
+git init -q . && cp -r "$RAIZ_SRC/tools" . && rm -f tools/locks/*.lock
+PR=./tools/auditoria/preparacion_ronda.sh
+espec() {  # espec <nivel> <§2> <primera línea de §4>
+    printf '# Especificación\n**Nivel de autonomía:** `%s`\n\n## 1. Visión General\n- Juego de prueba.\n\n## 2. Mecánicas y Sistemas\n%s\n\n## 3. Arquitectura Técnica y Contratos entre Roles\n### Contrato: salto (ronda 1)\n- señal saltado(altura) · arquitecto-sistemas · coordinador\n\n## 4. Criterios de Desempate y Topes\n%s\n- Rechazos de `auditor-calidad` por lote antes de `bloqueado`: 3.\n\n## 5. Estructura de Carpetas por Dueño\n- propiedad.tsv\n' \
+        "$1" "$2" "$3" > docs/direccion/especificaciones.md
+}
+plan() {  # plan <cuota> <filas...>
+    { printf '# Plan\n**Ventana:** x | **Cuota:** %s\n\n| # | Rol | Lote | Criterio de hecho | Comando de comprobación | Estado |\n|---|---|---|---|---|---|\n' "$1"
+      shift; printf '%s\n' "$@"; } > docs/direccion/plan_nocturno.md
+}
+lote() {  # lote <id> <ronda y dependencias> <comando> [estado]
+    printf '| 1 | arquitecto-sistemas | **%s** (%s). Lote de prueba. | Pasa sus tests. | `%s` | %s |' "$1" "$2" "$3" "${4:-pendiente}"
+}
+SALTO=$'### Salto (ronda 1)\n- Altura: 3 casillas; sin doble salto.'
+SALTO_POR=$'### Salto (ronda 1)\n- (POR ESCRIBIR: altura y casos borde)'
+MENU_POR=$'### Menú (ronda 2)\n- (POR ESCRIBIR: opciones)'
+DESEMPATE="- Prioridad: simplicidad > rendimiento > flexibilidad."
+espec bajo "$SALTO_POR" "- Prioridad: (POR ESCRIBIR: x)"
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+espera_codigo "[bajo] lote con criterio y comando: lista" 0 "lista para lanzar" $PR 1 --raiz .
+plan "a decidir" "$(lote A1 "ronda 1" "./tools/motor_silencioso.sh arquitecto-sistemas ...")"
+espera_codigo "[bajo] comando con '...': no lista" 1 "comando" $PR 1
+espec medio "$SALTO" "$DESEMPATE"
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+espera_codigo "[medio] ronda 1 con su sistema escrito: lista" 0 "lista para lanzar" $PR 1
+espec medio "$SALTO_POR" "$DESEMPATE"
+espera_codigo "[medio] apartado (ronda 1) con «POR ESCRIBIR»: no lista" 1 "ronda 1 con «POR ESCRIBIR»" $PR 1
+espec medio "$SALTO"$'\n'"$MENU_POR" "$DESEMPATE"
+espera_codigo "[medio] un apartado (ronda 2) pendiente no impide la ronda 1" 0 "lista para lanzar" $PR 1
+espec alto "$SALTO" "- Prioridad: (POR ESCRIBIR: x)"
+plan "100 euros por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+espera_codigo "[alto] §4 con «POR ESCRIBIR»: no lista" 1 "(§4)" $PR 1
+espec alto "$SALTO" "$DESEMPATE"
+plan "100 euros por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras Z9" ./tests/menu.sh)"
+espera_codigo "[alto] «tras Z9» que no existe: no lista" 1 "Z9" $PR 1
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+espera_codigo "[alto] cuota «a decidir»: no lista" 1 "Cuota" $PR 1
+plan "100 euros por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+espera_codigo "[alto] todo completo: lista" 0 "lista para lanzar" $PR 1
+espec altisimo "$SALTO" "$DESEMPATE"
+espera_codigo "nivel ilegible -> 2" 2 "ilegible" $PR 1
+espera_codigo "sin número de ronda -> 64" 64 "Uso" $PR
+# Auditoría: ronda en curso sin preparar, tope de rechazos y nivel distinto en normas
+printf '# Pendientes\n' > docs/direccion/pendientes_manana.md
+mkdir -p docs/direccion/roles
+for r in "${ROLES_P[@]}"; do printf '# Ficha\n## Dueño Exclusivo de Archivos\n- `%s/**`\n' "$r" > "docs/direccion/roles/$r.md"; done
+normas() { printf '# Normas\n## 9. Nivel de autonomía (`%s`), escalado y rondas\n' "$1" > docs/direccion/normas_comunes.md; }
+rechazo() { printf '%s | auditor-calidad | Rechazo A1: %s | tests/ | arquitecto-sistemas\n' "$(date "+%Y-%m-%d %H:%M")" "$1"; }
+auditar() { bash tools/auditoria/auditoria_proceso.sh --raiz . --informe "$TMP/informe.md" --excepciones "$TMP/sin_excepciones"; }
+en_informe() {  # en_informe <descripción> <texto>
+    if grep -q -- "$2" "$TMP/informe.md"; then ok "$1"; else cp "$TMP/informe.md" "$TMP/salida"; mal "$1"; fi
+}
+normas medio
+printf '# tablón\n%s | coordinador | Lote A1: salto | plan | arquitecto-sistemas\n' "$(date "+%Y-%m-%d %H:%M")" > docs/direccion/tablon.md
+espec medio "$SALTO_POR" "$DESEMPATE"
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh "en curso")"
+espera_codigo "auditoría: ronda en curso sin preparar -> hallazgo en la sección 6" 1 "6. Rondas en curso y nivel de autonomía: 1" auditar
+en_informe "... que nombra la ronda y su primera falta" "ronda 1 tiene lotes \`en curso\` sin estar preparada"
+espec medio "$SALTO" "$DESEMPATE"
+{ rechazo uno; rechazo dos; rechazo tres; } >> docs/direccion/tablon.md
+espera_codigo "auditoría: 3 rechazos de un lote no bloqueado -> hallazgo en la sección 4" 1 "4. Plan nocturno frente al tablón: 1" auditar
+en_informe "... con el número de rechazos y el tope" "lleva 3 rechazos de auditor-calidad (tope 3)"
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh bloqueado)"
+espera_codigo "... y ninguno si el lote ya está bloqueado" 0 "4. Plan nocturno frente al tablón: 0" auditar
+normas alto
+espera_codigo "auditoría: nivel distinto en la especificación y en normas §9 -> hallazgo" 1 "6. Rondas en curso y nivel de autonomía: 1" auditar
+en_informe "... que dice los dos niveles" "(\`medio\`) no coincide con el de la cabecera de §9 de las normas (\`alto\`)"
+cd "$R" || exit 1
+
 echo "== Resultado: $((TOTAL - FALLOS))/$TOTAL pruebas OK"
 (( FALLOS == 0 ))

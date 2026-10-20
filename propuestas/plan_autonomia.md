@@ -294,3 +294,205 @@ shellcheck -x -S warning $(find tools -name '*.sh') tools/hooks/pre-commit tools
 ```
 macOS (BSD `date`, bash de Homebrew y bash 3.2) y Windows (Git Bash, `core.autocrlf`) los cubre el CI: mirar sus
 seis trabajos tras cada push.
+
+---
+
+## 5. Estado al pausar la fase 9 (2026-10-20, para retomar tras `/compact`)
+
+**Frase para retomar:**
+> Lee la sección 5 de `propuestas/plan_autonomia.md` y `propuestas/adr_despachador.md` (aprobado) y sigue la fase 9
+> desde 9.3. Un commit por paso, push y CI verde (6 combinaciones) antes del siguiente; borra este plan en el último commit.
+
+**Hecho (CI verde salvo el último, recién subido):** fases 0-8 (`34e16ef`…`7bd1728`), `bedf886` (prueba de candado sin
+tiempos), 9.1 `32eff1b` (ADR aprobado con las respuestas y ajustes de la persona) y 9.2 `3a388dc` (`contrato:` y cuota
+`<n> USD por ronda` en la puerta; auditoría §4 sin hallazgo para un `pendiente` fuera del tablón). 171/171 pruebas.
+
+### 9.3 `reglas_comando.sh` (código escrito y probado a mano, sin pruebas automáticas; quitado del árbol)
+Aplicar con `git apply` el parche de abajo (raíz del repo). Reglas: `.parar` no se toca nunca desde una sesión
+(`rm|unlink|mv|cp|touch|truncate|ln|install`, redirecciones, `tee`); con `DESPACHADOR=1`, bloquea `git
+push|pull|merge|rebase|switch`, `git checkout -b|-B|--orphan` (también agrupado, `-qb`), `git branch` salvo listar
+(`git branch`, `-a -v`, `--show-current`, `--list <patrón>`) y lanzar `despachador.sh` (también `bash tools/despachador.sh`).
+Falta: sección de pruebas en `prueba_guardas.sh` con `orden "..."` (permite/bloquea con y sin `DESPACHADOR=1`; ojo, `orden`
+hace `env -u CLAUDE_ROL`, pasar `DESPACHADOR=1` delante: `DESPACHADOR=1 bash -c ...` o exportar y desexportar), casos:
+`rm .parar`, `echo x > .parar`, `cat .parar` (permitido), `git push` (solo con 1), `git checkout HEAD -- f` y
+`git branch --show-current` (permitidos con 1), `git branch nueva`, `bash tools/despachador.sh`, `cd x && git -C . push`.
+Cabecera de `pre_tool_guard.sh`: mencionar `DESPACHADOR=1`. Commit «Autonomía, fase 9: reglas de .parar y del despachador».
+
+```diff
+diff --git a/plantilla/tools/hooks/reglas_comando.sh b/plantilla/tools/hooks/reglas_comando.sh
+index 2ee22e8..2d7f639 100644
+--- a/plantilla/tools/hooks/reglas_comando.sh
++++ b/plantilla/tools/hooks/reglas_comando.sh
+@@ -4,6 +4,9 @@
+ #      motivo=$(motivo_bloqueo_linea "<orden completa>") || echo "BLOQUEADO: $motivo"
+ #      motivo=$(motivo_bloqueo_git <args de git...>)       || echo "BLOQUEADO: $motivo"
+ # Devuelven 1 e imprimen el motivo si la orden está prohibida; 0 si está permitida.
++# Con DESPACHADOR=1 en el entorno (sesiones que lanza tools/despachador.sh) se prohíbe además publicar, fusionar o
++# cambiar de rama (git push, pull, merge, rebase, switch, checkout -b, branch salvo para listar) y lanzar otro
++# despachador: la sesión trabaja en la rama autonomo/... que creó él y la fusión la decide la persona responsable.
+ 
+ # shellcheck source=requisitos.sh
+ source "$(dirname "${BASH_SOURCE[0]}")/requisitos.sh"
+@@ -74,6 +77,34 @@ _ruta_amplia() {
+     [[ "$p" == . || "$p" == */ || "$p" == :* || "$p" == *[\*\?\[]* || -d "$p" ]]
+ }
+ 
++# Con DESPACHADOR=1: imprime el motivo y devuelve 1 si la suborden <sub> [args...] publica, fusiona o cambia de rama.
++_git_despachador() {
++    local sub="$1" x lista=0 cambia=""
++    shift
++    case "$sub" in
++        push|pull|merge|rebase|switch) cambia="git $sub" ;;
++        checkout)
++            for x in "$@"; do
++                [[ "$x" == -- ]] && break
++                if [[ "$x" =~ ^-[a-zA-Z]*[bB] ]] || _opcion "$x" --orphan; then cambia="git checkout $x"; break; fi
++            done ;;
++        branch)
++            # Listar sí (git branch, -a, -v, --show-current, --list <patrón>); crear, borrar, renombrar o mover, no
++            for x in "$@"; do [[ "$x" == -l || "$x" == --list ]] && lista=1; done
++            for x in "$@"; do
++                case "$x" in
++                    -d|-D|--delete|-m|-M|--move|-c|-C|--copy|-f|--force|-u|--set-upstream-to*|--unset-upstream|--edit-description|-t|--track*|--no-track)
++                        cambia="git branch $x"; break ;;
++                    -*) ;;
++                    *) (( lista )) || { cambia="git branch $x"; break; } ;;
++                esac
++            done ;;
++    esac
++    [[ -z "$cambia" ]] && return 0
++    echo "Prohibido '$cambia' en una sesión del despachador (DESPACHADOR=1): se trabaja en la rama autonomo/... que creó él; publicar, fusionar y cambiar de rama lo decide la persona responsable."
++    return 1
++}
++
+ # Recibe los argumentos que van detrás de "git".
+ motivo_bloqueo_git() {
+     local -a t=("$@")
+@@ -103,6 +134,9 @@ motivo_bloqueo_git() {
+     local -a a=("${t[@]:i+1}") pos=()
+     local x f j c m
+ 
++    if [[ "${DESPACHADOR:-}" == 1 ]] && ! _git_despachador "$sub" "${a[@]}"; then
++        return 1
++    fi
+     case "$sub" in
+         stash)
+             echo "Prohibido 'git stash' en árbol compartido. Usa commits por rutas."
+@@ -320,11 +354,13 @@ segmentos_orden() { printf '%s' "$1" | LC_ALL=C awk "$_AWK_SEGMENTOS"; }
+ 
+ _es_shell() { [[ "$1" =~ ^(ba|z|da|k)?sh(\.exe)?$ ]]; }
+ 
+-# Archivos que no se escriben desde la terminal: imprime "tablon" (docs/direccion/tablon.md) o "gitconfig"
+-# (.git/config o config.worktree, que pueden cambiar core.hooksPath).
++# Archivos que no se escriben desde la terminal: imprime "tablon" (docs/direccion/tablon.md), "gitconfig"
++# (.git/config o config.worktree, que pueden cambiar core.hooksPath) o "parar" (.parar, el interruptor de parada del
++# despachador: solo lo crea o lo borra la persona responsable desde su terminal).
+ _protegido() {
+     local p="${1//\\//}"
+     if [[ "${p##*/}" == tablon.md ]]; then echo tablon; return 0; fi
++    if [[ "${p%/}" == .parar || "${p%/}" == */.parar ]]; then echo parar; return 0; fi
+     [[ "$p" =~ (^|/)\.git/(worktrees/[^/]+/)?config(\.worktree)?$ ]] && { echo gitconfig; return 0; }
+     return 1
+ }
+@@ -401,8 +437,27 @@ motivo_bloqueo_linea() {
+                 fi
+             done
+         fi
++        # Órdenes que crean, borran, mueven o copian archivos: .parar no se toca desde una sesión
++        if [[ "$base" =~ ^(rm|unlink|mv|cp|touch|truncate|ln|install)(\.exe)?$ ]]; then
++            for x in "${tok[@]:k+1}"; do
++                if [[ "$(_protegido "$x")" == parar ]]; then
++                    echo "Prohibido tocar .parar desde una sesión ($base): es el interruptor de parada del despachador y solo lo crea o lo borra la persona responsable."
++                    return 1
++                fi
++            done
++        fi
++        if [[ "${DESPACHADOR:-}" == 1 ]]; then
++            x="$base"
++            _es_shell "$base" && x="$(_basename_cmd "${tok[k+1]:-}")"
++            if [[ "$x" == despachador.sh ]]; then
++                echo "Prohibido lanzar el despachador desde una de sus sesiones (DESPACHADOR=1): lo lanza la persona responsable desde su terminal."
++                return 1
++            fi
++        fi
+         if protegido="$(_escribe_protegido "${tok[@]:k}" || _escribe_protegido "${tok[@]:0:k}")"; then
+-            if [[ "$protegido" == gitconfig ]]; then
++            if [[ "$protegido" == parar ]]; then
++                echo "Prohibido escribir en .parar desde la terminal: es el interruptor de parada del despachador y solo lo crea o lo borra la persona responsable."
++            elif [[ "$protegido" == gitconfig ]]; then
+                 echo "Prohibido escribir en la configuración de git desde la terminal: podría cambiar core.hooksPath y saltarse los hooks del proyecto."
+             else
+                 echo "Prohibido escribir en el tablón desde la terminal. Usa ./tools/hooks/entregar.sh <rol> \"<qué>\" \"<ruta o commit>\" <destino> [-- <rutas>] (pone la hora real y commitea tu fila con tus rutas)."
+```
+
+### 9.4 `tools/despachador.sh` + `tools/hooks/tests/claude_falso.sh` (por hacer; diseño en el ADR §3)
+Decisiones de implementación ya tomadas (coherentes con el ADR):
+- Cabecera con uso, opciones y códigos: 0 terminó (nada más lanzable; los bloqueados van al resumen), 1 paró antes
+  (cuota, `.parar`, puerta no lista, árbol sucio al empezar ronda), 2 no arranca (nivel no `alto`, `claude --help` sin
+  `--permission-mode --allowedTools --disallowedTools --max-turns --max-budget-usd --output-format --no-session-persistence`,
+  `core.hooksPath` ≠ `tools/hooks`, árbol sucio, cuota ilegible, rama que no es `RAMA_PRINCIPAL` ni `autonomo/*`), 64 uso,
+  75 otro despachador. `RAMA_PRINCIPAL="{{RAMA_PRINCIPAL}}"`, zona `{{ZONA_HORARIA}}` como `entregar.sh`.
+- Todo dentro de `with_lock.sh despachador coordinador "$0" ...` (variable interna como `_ENTREGAR_CON_CANDADO`).
+- Variables: `DESPACHADOR_CLAUDE` (defecto `claude`), `DESPACHADOR_MAX_TURNOS` 80, `DESPACHADOR_TIEMPO_MAX` 3600 s,
+  `DESPACHADOR_MODELO` (opcional). Vigilante: claude en segundo plano, bucle `kill -0` cada 1 s, TERM y a los 30 s KILL.
+- Sesión: `CLAUDE_ROL=<rol> DESPACHADOR=1 "$CLAUDE" -p "<prompt>" --permission-mode dontAsk --allowedTools "Bash Read Grep
+  Glob Edit Write NotebookEdit Agent(agente-ejecutor-lote) Agent(agente-ejecutor-mecanico) Agent(agente-buscador-lectura)"
+  --disallowedTools "WebFetch WebSearch Bash(./tools/despachador.sh*) Agent(Explore) Agent(general-purpose) Agent(Plan)
+  Agent(claude)" --max-turns N --max-budget-usd <resto de la cuota, 2 decimales> --output-format json
+  --no-session-persistence < /dev/null > r<N>_<ID>_<rol>_<k>.json 2> ….err`. JSON con `campos_json` de `leer_json.sh`
+  (`total_cost_usd subtype num_turns is_error`); si falta el coste, se suma el tope entero de esa sesión.
+- Prompt del rol: «Eres <rol>. Tienes trabajo en el tablón: lote <ID> de la ronda <N> (plan_nocturno.md), intento K.
+  Trabajas sin nadie delante (nivel alto, normas §9): ./tools/hooks/arranque_rol.sh <rol>, haz el lote, pasa su comando
+  de comprobación y entrégalo con ./tools/hooks/entregar.sh <rol> "Lote <ID>: <resumen>" "<ruta o commit>" auditor-calidad
+  -- <rutas>. Duda que §4 no resuelve: entregar.sh <rol> "Duda <ID>: <pregunta>" x coordinador y termina. Sin push, merge
+  ni cambios de rama.» + en reintentos «auditor-calidad lo rechazó: <motivo de la última fila Rechazo>».
+- Prompt del auditor: «Eres auditor-calidad. Revisa el lote <ID> (ronda N; dueño: <rol>) … Si está bien:
+  entregar.sh auditor-calidad "Validado <ID>: <qué comprobaste>" "<commit>" coordinador; si no: "Rechazo <ID>: <motivo>"
+  hacia <rol>. Solo una de las dos.»
+- Filas nuevas: guardar `wc -l` del tablón antes; después `tail -n +$((N+1))`; si `head -n N` cambió, fallo. Entrega =
+  origen el rol y «qué» que empieza por el lote (regla awk de `auditoria_proceso.sh` §4); duda = `Duda <ID>`; auditor =
+  `Validado <ID>` / `Rechazo <ID>` (si hay los dos, manda el rechazo; en el rol, si hay entrega y duda, manda la duda).
+  Auditor sin fila: se repite una vez; si tampoco, `Fallo`.
+- Intentos = filas `Rechazo <ID>` de auditor-calidad + filas `Fallo <ID>` de coordinador en el tablón (reanudable). Con
+  `MAX_RECHAZOS` (de §4 de la especificación, como la auditoría) → `bloqueado` + entrada en `pendientes_manana.md`
+  (formato `fecha | rol | pregunta | opciones | bloquea a`). Entre intentos el lote sigue `en curso`.
+- Estado del plan: editar la celda Estado de la fila con `**ID**` (proteger `\|` como hace la puerta) y entregar como
+  coordinador: `Encargo <ID> (ronda N, intento K): <texto>` → rol (pasa a `en curso`), `Fallo <ID>: <motivo>` → rol,
+  `Estado <ID>: hecho|bloqueado (<motivo>)` → persona-responsable, `Pausa (ronda N): <motivo>; sigue <ID>` → persona-responsable.
+- Dependencias «tras X»: terminadas = `hecho|entregado|validado|terminado|completado|cerrado`; dependencia `bloqueado` →
+  `bloqueado` por dependencia. Ronda cerrada cuando no queda `pendiente|en curso` lanzable; ciclos se quedan y van al resumen.
+- Candado del motor o de la build (`with_lock.sh --estado motor|{{CANDADO_BUILD}}` = ocupado/dudoso): posponer el lote
+  una vez al final de la ronda; si sigue, `Fallo` sin lanzar sesión.
+- Limpieza tras cada sesión (`git status --porcelain -z --untracked-files=all`): rutas cuyo `dueno_de_ruta` es el rol
+  de la sesión → copia en `.despachador_logs/<ejecución>/sobras/<sesión>/`, y `git restore --source=HEAD --staged
+  --worktree` (con historia) o `rm -f` (nuevas). Lo de otros dueños: al resumen; árbol sucio al empezar ronda → para.
+- Registro: `.despachador_logs/<YYYY-MM-DD_HHMM>_<pid>/`, 10 últimas; `resumen.md` (rama, rondas, hechos, bloqueados con
+  motivo, coste por ronda, motivo de parada, auditoría con `--informe` dentro de la carpeta, `git log --oneline
+  RAMA_PRINCIPAL..<rama>`); una línea por sesión en la terminal.
+- `claude_falso.sh`: `--help` imprime las opciones; guion `CLAUDE_FALSO_GUION` (una línea por sesión:
+  `<rol esperado> <acción>[+parar] [coste]`, contador en un archivo junto al guion; rol distinto de `CLAUDE_ROL` → error);
+  acciones `entrega`, `valida`, `rechaza`, `duda`, `nada`, `sucio` (crea `tools/hooks/sobra_falsa.txt` sin commitear y no
+  entrega), `lento` (sleep 30), `turnos` (sale 1 con `subtype error_max_turns`); `+parar` hace `touch .parar` al acabar.
+  Saca el ID del prompt (`lote ([A-Za-z]+[0-9]+)`) y el dueño (`dueño: ([a-z-]+)`); apunta argumentos y `CLAUDE_ROL`/
+  `DESPACHADOR` en `CLAUDE_FALSO_ARGS`. Imprime `{"type":"result","subtype":…,"is_error":…,"num_turns":3,
+  "total_cost_usd":<coste>,"session_id":"falso-<n>","result":"…"}`.
+- Pruebas (sección nueva de `prueba_guardas.sh`, un repo temporal por escenario, `MAX_RECHAZOS` 2 o 1 en §4 para ir
+  rápido): lote hecho (opciones de claude, `CLAUDE_ROL`, `DESPACHADOR=1`, rama `autonomo/*`, plan `hecho`); rechazo hasta
+  el tope (`bloqueado`, pendiente, nunca `pendiente` entre intentos); sesión `sucio` (sobras limpiadas y copiadas, árbol
+  limpio); duda (bloqueado y su dependiente también); `+parar` (sale 1, B1 sigue pendiente; quitar `.parar` y relanzar
+  reanuda en la misma rama); cuota 1 USD con costes 0.7+0.5 (pausa, `--max-budget-usd 0.30` al auditor);
+  `DESPACHADOR_TIEMPO_MAX=2` con `lento`; candado del motor ocupado; segundo despachador (75); nivel `medio` (2);
+  `--simular` sin commits ni rama.
+- También: fila `tools/despachador.sh	arquitecto-sistemas` en `propiedad.tsv` y en la ficha de arquitecto-sistemas;
+  `.gitignore` con `.parar` y `.despachador_logs/`; shellcheck; CI (no hace falta paso nuevo: van en `prueba_guardas.sh`).
+
+### 9.5 Documentación y cierre (por hacer)
+Normas §9 (bloque `alto`: cómo se arranca y se para el despachador, cuota `<n> USD por ronda`, filas `Duda`/`Validado`),
+ficha de auditor-calidad (`Validado <lote>` hacia coordinador), cuestionario E4 (formato de cuota en `alto`),
+`readme.txt` §4 (mapa), §6.6 y §8 (quitar «está en diseño»), `actualizar.md` (avisos: despachador, reglas nuevas,
+`.gitignore`, cuota en USD, `contrato:`, auditoría §4) y borrar este archivo en el último commit.
+
+**Ayudantes de prueba** (scratchpad `/tmp/claude-0/-home-user-estudio-videojuegos-por-roles/df3d345d-80cf-5083-b180-56ad68aa629d/scratchpad`):
+`desplegar.sh <motor> <destino>`, `comprobar.sh <despliegue>` (pasos 8-10 + shellcheck), `arbol.sh <destino> <rutas…>`
+(HEAD + rutas del árbol) y `fase9_3_prueba_reglas_manual.sh`. Si se perdieron, recrearlos con la sección 4.
+

@@ -1,7 +1,7 @@
 # Despliegue del sistema de trabajo (instrucciones para la sesión de chat)
 
 Las sigue la sesión de Claude Code que la persona abre en la carpeta del proyecto tras pegar la frase de arranque
-(`readme.txt`, sección 5). `<PLANTILLA>` es la carpeta donde está este archivo. Hasta el paso 9 la sesión no tiene
+(`README.md`, sección 5). `<PLANTILLA>` es la carpeta donde está este archivo. Hasta el paso 9 la sesión no tiene
 rol: es «la sesión de despliegue». No toques nada del proyecto antes del paso 4.
 
 ## 1. Comprobar el entorno (sin preguntar)
@@ -11,7 +11,7 @@ rol: es «la sesión de despliegue». No toques nada del proyecto antes del paso
 - Si la carpeta ya es un repositorio: `git status` debe estar limpio; trabaja en una rama nueva (`git switch -c sistema-roles`).
 
 ## 2. Leer antes de preguntar
-- `<PLANTILLA>/readme.txt` (secciones 1 a 4) y `<PLANTILLA>/cuestionario.md`. No hace falta leer `plantilla/` entera.
+- `<PLANTILLA>/README.md` (secciones 1 a 4) y `<PLANTILLA>/cuestionario.md`. No hace falta leer `plantilla/` entera.
 
 ## 3. Hacer el cuestionario
 - Un bloque cada vez (A, B, C, D, E, F), con el valor por defecto a la vista. Si la persona no sabe: defecto.
@@ -87,10 +87,10 @@ git status --short                           # limpio salvo el informe de audito
 ## 11. Cierre
 - Explica a la persona, en pocas líneas: qué se creó, el resultado de la comprobación y qué hacer ahora.
 - **Hay que cerrar esta sesión y abrir otra**: Claude Code carga `CLAUDE.md` y los hooks de `.claude/settings.json`
-  al arrancar. La primera sesión nueva es la del coordinador (`readme.txt`, sección 6).
+  al arrancar. La primera sesión nueva es la del coordinador (`README.md`, sección 6).
 - En nivel `medio` o `alto`, di a la persona que la primera tarea del coordinador es escribir con ella la
   especificación (`docs/direccion/especificaciones.md`) y el plan de la ronda 1, y que
   `./tools/auditoria/preparacion_ronda.sh 1` dice lo que falta antes de poder lanzarla.
 - En nivel `alto`, además, que la cuota va como `<n> USD por ronda` y que las rondas las lanza ella desde su terminal
-  con `./tools/despachador.sh` (`--simular` dice qué haría; `readme.txt`, 6.6).
+  con `./tools/despachador.sh` (`--simular` dice qué haría; `README.md`, 6.6).
 - Si hay remoto (GitHub…), sube la rama solo si la persona lo pide.

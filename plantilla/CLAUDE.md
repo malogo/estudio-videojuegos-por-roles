@@ -18,3 +18,4 @@
 - Subagentes: solo `agente-ejecutor-lote`, `agente-ejecutor-mecanico` y `agente-buscador-lectura` (`.claude/agents/`),
   con `docs/direccion/roles/plantilla_encargo.md`. En este proyecto sus normas sobre subagentes mandan sobre el `CLAUDE.md` global del usuario.
 - La especificación completa está en `docs/direccion/especificaciones.md`; ábrela solo si el lote lo requiere.
+- Nivel de autonomía: `{{NIVEL_AUTONOMIA}}` (normas §9).

@@ -18,6 +18,11 @@
 
 ## Qué NO HACE
 - Nunca repara archivos de otros dueños: anota el rechazo en el tablón y despierta al dueño.
+  El rechazo va siempre con esta forma, para poder contarlos:
+  `./tools/hooks/entregar.sh auditor-calidad "Rechazo <lote>: <motivo>" "<ruta o commit>" <rol dueño>`.
+{{#SI NIVEL_AUTONOMIA=medio,alto}}
+- Al llegar un lote a {{MAX_RECHAZOS}} rechazos no lo vuelve a revisar: avisa a `coordinador` para que lo pase a `bloqueado`.
+{{#FIN}}
 
 ## A quién entrega
 - A la persona responsable (entregas validadas) o devuelve al rol dueño si falla la puerta de calidad.

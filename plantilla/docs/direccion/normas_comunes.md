@@ -88,13 +88,49 @@
 - Nada llega a la persona responsable sin pasar por `auditor-calidad`.
 - Un fallo visual o de flujo que se repite se convierte en un detector automático en las rutas de tests.
 - Tope de rondas de corrección: si persiste un fallo estructural, se rehace desde cero.
+- Cada rechazo de `auditor-calidad` se anota siempre igual (así se cuentan):
+  `./tools/hooks/entregar.sh auditor-calidad "Rechazo <lote>: <motivo>" "<ruta o commit>" <rol dueño>`.
+{{#SI NIVEL_AUTONOMIA=bajo}}
+- Rechazos sin tope automático: tras cada uno decide la persona responsable.
+{{#FIN}}
+{{#SI NIVEL_AUTONOMIA=medio,alto}}
+- Tope: con {{MAX_RECHAZOS}} rechazos, el lote pasa a `bloqueado` (§9).
+{{#FIN}}
 
-## 9. Escalado y trabajo nocturno
-- Dudas de alcance, normas nuevas, compras o publicación → `docs/direccion/pendientes_manana.md` y seguir con otra cosa.
+## 9. Nivel de autonomía (`{{NIVEL_AUTONOMIA}}`), escalado y rondas
+- El nivel lo fija la línea «Nivel de autonomía» de `especificaciones.md`; lo cambia `coordinador` con aprobación de la persona responsable.
 - No inventes decisiones de producto: si la especificación no lo dice, se escala.
-- El trabajo sin supervisión sigue `docs/direccion/plan_nocturno.md`. Las rondas las lanza `coordinador` cuando lo pide la persona responsable.
-- Pausas por cuota: `coordinador` las declara en el tablón indicando qué sigue y qué espera.
-- No lances todas las sesiones a la vez sobre la misma tanda.
+- Antes de lanzar la ronda N, `./tools/auditoria/preparacion_ronda.sh N` debe salir con 0. Si no, la ronda no se lanza
+  y lo que falta va a `docs/direccion/pendientes_manana.md`.
+- El trabajo sin supervisión sigue `docs/direccion/plan_nocturno.md`. Pausas por cuota: `coordinador` las declara en el
+  tablón indicando qué sigue y qué espera. No lances todas las sesiones a la vez sobre la misma tanda.
+{{#SI NIVEL_AUTONOMIA=bajo}}
+- Nivel `bajo` (control paso a paso): la persona responsable lanza cada lote, pasa los avisos entre sesiones y hace
+  `/clear` tras cada lote. Basta la §1 de la especificación; lo demás se completa lote a lote.
+- Dudas que la especificación no resuelve (y siempre alcance, normas nuevas, compras o publicación): se preguntan al
+  momento o van a `pendientes_manana.md` y se para.
+{{#FIN}}
+{{#SI NIVEL_AUTONOMIA=medio}}
+- Nivel `medio` (rondas supervisadas): las rondas las lanza `coordinador` cuando lo pide la persona responsable y despierta
+  a los roles hasta que `auditor-calidad` cierra la ronda. Antes de la ronda N, los apartados `(ronda M)` con M ≤ N de
+  §2 y §3 de la especificación están escritos y todos los lotes de la ronda tienen criterio y comando en el plan.
+- Dudas de alcance, normas nuevas, compras o publicación → `pendientes_manana.md`; el lote pasa a `bloqueado` y el rol
+  sigue con su cola.
+- Con {{MAX_RECHAZOS}} rechazos de `auditor-calidad`, el lote pasa a `bloqueado` y se avisa a la persona responsable en `pendientes_manana.md`.
+{{#FIN}}
+{{#SI NIVEL_AUTONOMIA=alto}}
+- Nivel `alto` (flujo desatendido): las rondas no esperan a la persona responsable; al cerrar una `auditor-calidad`,
+  `coordinador` lanza la siguiente si su puerta sale con 0. La persona responsable revisa la rama al final.
+- Antes de la ronda 1, §1-§4 de la especificación enteras sin marcadores «POR ESCRIBIR», y todas las rondas del plan con
+  criterio, comando y dependencias («tras X») que existen; la cuota, definida.
+- Ningún lote que consuma un contrato de §3 pasa a `en curso` si su contrato no está firmado.
+- Dudas técnicas internas: las decide `arquitecto-sistemas` (o `coordinador`, si son de gestión) con los criterios de §4
+  de la especificación y las apunta en su memoria. Solo se escala a `pendientes_manana.md` lo que implica compras,
+  licencias/NDA o cambiar la visión o el alcance: ese lote pasa a `bloqueado` y el resto sigue.
+- Con {{MAX_RECHAZOS}} rechazos de `auditor-calidad`, el lote pasa a `bloqueado` sin esperar a nadie (queda anotado en
+  `pendientes_manana.md`) y se sigue con el siguiente.
+- Contexto: cada lote empieza en una sesión nueva (o tras volcar la memoria y `/clear`); no se arrastra contexto entre lotes.
+{{#FIN}}
 
 ## 10. Producto (recordatorio mínimo)
 - {{MOTOR}}; plataformas: {{PLATAFORMAS}}.

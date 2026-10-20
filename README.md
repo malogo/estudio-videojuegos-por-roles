@@ -1,5 +1,7 @@
 <div align="center">
 
+![Estudio de videojuegos por roles: orquestación multiagente con Claude Code](.github/portada.png)
+
 # 🎮 Sistema de trabajo por roles con sesiones de Claude Code
 
 **Plantilla para montarlo en cualquier proyecto de videojuego**
@@ -7,6 +9,7 @@
 PC, móvil, consola o web · Godot, Unity, Unreal u otro motor
 
 [![Prueba de la plantilla](https://github.com/malogo/estudio-videojuegos-por-roles/actions/workflows/prueba_plantilla.yml/badge.svg)](https://github.com/malogo/estudio-videojuegos-por-roles/actions/workflows/prueba_plantilla.yml)
+[![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](LICENSE)
 
 </div>
 
@@ -421,12 +424,14 @@ reglas de git, candados, auditoría de proceso y nube.
 | Archivo / carpeta | Qué es |
 |---|---|
 | [`README.md`](README.md) | Este archivo. |
+| [`LICENSE`](LICENSE) | Licencia MIT: puedes usar, copiar y modificar la plantilla citando la autoría. |
 | [`cuestionario.md`](cuestionario.md) | Las preguntas del despliegue, con opciones y valor por defecto. |
 | [`desplegar.md`](desplegar.md) | Los pasos que sigue la sesión de despliegue. |
 | [`rellenar_plantilla.py`](rellenar_plantilla.py) | Copia la plantilla al proyecto y rellena los huecos `{{ASI}}`. |
 | [`ejemplo_valores_unity_pc.json`](ejemplo_valores_unity_pc.json) | Ejemplo de respuestas (Unity, PC) en el formato que usa el script. |
 | [`ejemplo_valores_godot_pc.json`](ejemplo_valores_godot_pc.json) | Lo mismo para Godot (PC). |
 | [`actualizar.md`](actualizar.md) | Cómo llevar una versión nueva de la plantilla a un proyecto ya desplegado. |
+| [`.github/portada.png`](.github/portada.png) | Imagen de cabecera; sirve también como vista previa social del repo. |
 | [`.github/workflows/`](.github/workflows/) | Prueba automática de la plantilla (despliegue Godot y Unity + pruebas, en Linux, macOS y Windows; en Linux, también los tres niveles de autonomía). |
 | [`plantilla/`](plantilla/) | Todos los archivos genéricos, con huecos `{{ASI}}`. |
 | [`extras/godot`](extras/godot), [`extras/unity`](extras/unity) | Comprobaciones propias de cada motor. |

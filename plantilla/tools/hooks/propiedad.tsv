@@ -26,6 +26,7 @@ docs/direccion/archivo/**	coordinador
 tools/hooks/**	arquitecto-sistemas
 tools/locks/**	arquitecto-sistemas
 tools/motor_silencioso.sh	arquitecto-sistemas
+tools/despachador.sh	arquitecto-sistemas
 .gitignore	arquitecto-sistemas
 .gitattributes	arquitecto-sistemas
 .claude/**	arquitecto-sistemas

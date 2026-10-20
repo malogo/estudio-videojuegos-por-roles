@@ -3,6 +3,9 @@
 tools/locks/*.lock
 # Salida completa del motor (tools/motor_silencioso.sh guarda los 30 últimos logs)
 .motor_logs/
+# Despachador del nivel alto (tools/despachador.sh): interruptor de parada y registro de las 10 últimas ejecuciones
+.parar
+.despachador_logs/
 
 # Generado por el motor ({{MOTOR}})
 {{IGNORAR_MOTOR}}

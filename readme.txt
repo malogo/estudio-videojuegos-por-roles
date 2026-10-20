@@ -48,6 +48,10 @@ La idea es la de un pequeño estudio:
 - Motor sin sonido y con candado: el motor del juego solo se abre en modo silencioso y de
   uno en uno (un "candado" impide que dos sesiones lo usen a la vez y estropeen la caché).
   El candado dura lo que dure el motor, aunque la sesión que lo lanzó se corte a medias.
+- Niveles de autonomía (bajo, medio o alto, se elige al desplegar): cuanto menos intervengas
+  durante el trabajo, más hay que dejar escrito antes (especificación, contratos entre roles,
+  cómo se comprueba cada lote). Antes de lanzar cada ronda, una puerta automática
+  (preparacion_ronda.sh) comprueba que eso está escrito; si no, la ronda no se lanza.
 - Sesiones en la nube: también se puede encargar trabajo a sesiones de Claude Code en la
   web. Trabajan en su propia rama, abren una propuesta de cambio (PR) y dejan su línea del
   tablón en un archivo aparte; al aceptarla, el coordinador la pasa al tablón.
@@ -65,6 +69,8 @@ Lote ............. trabajo pequeño y comprobable que se encarga a un rol.
 Encargo .......... ficha para mandar un lote a un subagente.
 Hooks ............ guardas automáticas que bloquean lo prohibido.
 Candado .......... impide que dos sesiones usen el motor o hagan una build a la vez.
+Autonomía ........ nivel bajo, medio (por defecto) o alto: cuánto trabaja el sistema sin ti.
+Puerta de ronda .. comprobación de que lo escrito basta para lanzar una ronda en ese nivel.
 
 
 4. MAPA DE CARPETAS (lo que crea el despliegue en el proyecto)
@@ -79,7 +85,8 @@ CLAUDE.md                          Lo primero que lee cada sesión: cómo arranc
    agente-buscador-lectura.md         buscar y resumir, sin tocar nada (modelo pequeño).
 docs/direccion/
    normas_comunes.md               Las normas de todos, en 11 apartados cortos.
-   especificaciones.md             Qué es el juego (lo escribe el coordinador con la persona).
+   especificaciones.md             Qué es el juego (lo escribe el coordinador con la persona) y el
+                                   nivel de autonomía; lo pendiente lleva "(POR ESCRIBIR: …)".
    tablon.md                       El tablón.
    plan_nocturno.md                Los lotes de la ronda.
    pendientes_manana.md            Las dudas para la persona responsable.
@@ -116,6 +123,7 @@ tools/motor_silencioso.sh          ÚNICA forma de abrir el motor: sin sonido y 
                                    salida en .motor_logs/ y da un resumen corto con los errores y los
                                    archivos que el motor ha creado o cambiado (por dueño).
 tools/auditoria/auditoria_proceso.sh  Revisión del proceso que hace el auditor.
+tools/auditoria/preparacion_ronda.sh  Puerta antes de lanzar la ronda N: dice qué falta por escribir según el nivel.
 tools/auditoria/ruido_motor.txt    Errores del motor que el auditor ha dado por benignos.
 
 
@@ -154,6 +162,9 @@ tú copies nada. En una terminal funciona igual, pero los avisos los escribes t�
     especialistas casi siempre van bien con esfuerzo medio o alto; el coordinador, alto.
   - Abre primero el coordinador, cuéntale qué juego quieres y pídele la especificación y
     el primer plan. Las demás ventanas pueden esperar hasta que les toque.
+  - En nivel medio o alto eso es lo primero, antes de cualquier ronda: los sistemas y los
+    contratos de la ronda 1 (en alto, la especificación entera, con criterios de desempate)
+    y sus lotes con criterio y comando. ./tools/auditoria/preparacion_ronda.sh 1 dice lo que falta.
 
 6.2 El ciclo de un lote (lo que pasa cada vez)
   1. Pides al coordinador: "lanza la ronda N" (o "encarga X a <rol>").
@@ -203,9 +214,17 @@ tú copies nada. En una terminal funciona igual, pero los avisos los escribes t�
   Especialistas: hacen su lote, solo en sus archivos, y lo entregan por el tablón.
 
 6.6 Rondas
-  Pide al coordinador "lanza la ronda N". Él marca los lotes en el plan y despierta solo las
-  ventanas que tocan, sin poner a dos roles sobre los mismos archivos. Las rondas solo se
-  lanzan cuando tú lo pides; mientras tanto, las ventanas esperan.
+  Quién lanza el trabajo depende del nivel de autonomía (normas §9):
+  - bajo: tú, lote a lote. Pasas los avisos entre ventanas y haces /clear tras cada lote.
+  - medio (por defecto): pides al coordinador "lanza la ronda N". Él pasa la puerta
+    (preparacion_ronda.sh N), marca los lotes en el plan y despierta solo las ventanas que
+    tocan, sin poner a dos roles sobre los mismos archivos, hasta que el auditor cierra la
+    ronda. Las rondas solo se lanzan cuando tú lo pides; mientras tanto, las ventanas esperan.
+  - alto: las rondas se encadenan sin esperarte, cada una solo si su puerta sale bien; las
+    dudas técnicas se deciden con los criterios de la especificación (§4) y solo te llega lo
+    que cuesta dinero, toca licencias o cambia la visión. Revisas la rama al final.
+  Con cualquier nivel, si la puerta no sale bien la ronda no se lanza y lo que falta va a
+  pendientes_manana.md.
 
 6.7 Decisiones
   Lo que no está en la especificación (alcance, normas nuevas, compras, publicación) nunca
@@ -286,6 +305,12 @@ Cambia según la plataforma:
 - La batería completa de pruebas de las guardas del proyecto original no se trae: era
   específica de aquel proyecto. Se incluye tools/hooks/tests/prueba_guardas.sh, más corta.
 - En Unreal conviene Git LFS para los .uasset; la plantilla no lo configura sola.
+- La puerta de ronda comprueba la FORMA, no la calidad: que no queden "(POR ESCRIBIR" y que cada
+  lote tenga criterio y un comando sin huecos ("...", "<ruta>"). No ejecuta el comando ni juzga si lo
+  escrito es bueno: eso lo hacen la persona y el auditor.
+- El nivel alto, por ahora, encadena las rondas desde la ventana del coordinador: alguien tiene que
+  tener las ventanas abiertas. El trabajo realmente desatendido (un despachador que abra una sesión
+  nueva por lote, con topes de gasto y parada) está en diseño y no viene en la plantilla.
 
 
 9. QUÉ HAY EN ESTA CARPETA
@@ -297,6 +322,7 @@ rellenar_plantilla.py          Copia la plantilla al proyecto y rellena los huec
 ejemplo_valores_unity_pc.json  Ejemplo de respuestas (Unity, PC) en el formato que usa el script.
 ejemplo_valores_godot_pc.json  Lo mismo para Godot (PC).
 actualizar.md                  Cómo llevar una versión nueva de la plantilla a un proyecto ya desplegado.
-.github/workflows/             Prueba automática de la plantilla (despliegue Godot y Unity + pruebas, en Linux, macOS y Windows).
+.github/workflows/             Prueba automática de la plantilla (despliegue Godot y Unity + pruebas, en Linux, macOS y Windows;
+                               en Linux, también los tres niveles de autonomía).
 plantilla/                     Todos los archivos genéricos, con huecos {{ASI}}.
 extras/godot, extras/unity     Comprobaciones propias de cada motor.

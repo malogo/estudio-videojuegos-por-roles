@@ -6,7 +6,8 @@ rol: es «la sesión de despliegue». No toques nada del proyecto antes del paso
 
 ## 1. Comprobar el entorno (sin preguntar)
 - `git --version`, `bash --version`, `python3 --version` (o `python --version` en Windows) y `ls -la` de la carpeta.
-- En Windows hace falta Git Bash (los hooks son bash). Si falta algo, dilo y para.
+- Hace falta bash 4 o posterior (los hooks son bash): en Windows, Git Bash; en macOS, `brew install bash` (trae 3.2).
+  Si falta algo, dilo y para.
 - Si la carpeta ya es un repositorio: `git status` debe estar limpio; trabaja en una rama nueva (`git switch -c sistema-roles`).
 
 ## 2. Leer antes de preguntar
@@ -41,13 +42,15 @@ python3 <PLANTILLA>/rellenar_plantilla.py --valores <ruta>/valores.json --destin
 ## 7. Primer commit (antes de activar los hooks)
 ```bash
 git init -b <RAMA_PRINCIPAL>          # solo si no era un repositorio
-git add -- CLAUDE.md .gitignore .claude docs tools
-git add --chmod=+x -- tools/hooks/pre-commit tools/hooks/commit-msg $(git ls-files -- 'tools/*.sh')
+git add -- CLAUDE.md .gitignore .gitattributes .claude docs tools
+git add --chmod=+x -- $(grep -l '^#!' $(git ls-files -- tools))   # los scripts con #! (no las bibliotecas)
 git commit -m "coordinador: despliegue inicial del sistema de trabajo"
 ```
 - Rutas explícitas, nunca `git add -A` ni `git add .` (si el hook ya está cargado, los bloquea igualmente).
 - `--chmod=+x` guarda en git el permiso de ejecución. En Windows el archivo no lo lleva y, sin esto, en Linux y en la
   nube los hooks de git se ignoran en silencio y `./tools/...` da «Permission denied». `prueba_guardas.sh` lo comprueba.
+- `.gitattributes` fija los finales de línea LF de los scripts: con CRLF (`core.autocrlf` de Windows), al clonar o al
+  traer cambios bash deja de entenderlos. `prueba_guardas.sh` también lo comprueba.
 
 ## 8. Activar los hooks y fijar el rol
 ```bash

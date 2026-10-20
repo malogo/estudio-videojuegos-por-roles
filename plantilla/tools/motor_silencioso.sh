@@ -23,6 +23,9 @@ ROLE_NAME="${1:?Especifica tu nombre de rol como primer argumento}"
 shift 1
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Dueños de las rutas (y comprobación de bash 4+: abajo se usan arrays asociativos)
+# shellcheck source=hooks/propiedad.sh
+source "$ROOT/tools/hooks/propiedad.sh"
 MOTOR_BIN="${MOTOR_BIN:-{{BINARIO_MOTOR}}}"
 # Argumentos que garantizan "sin sonido" y sin interfaz (ver cuestionario.md, pregunta del motor).
 ARGS_SILENCIO=({{ARGS_MOTOR_SILENCIOSO}})
@@ -127,8 +130,6 @@ fi
 N_ERRORES=$(wc -l < "$TMP/errores" | tr -d ' ')
 
 # Errores por dueño: rutas res://..., Assets/..., Packages/... o relativas que existan
-# shellcheck source=hooks/propiedad.sh
-source "$ROOT/tools/hooks/propiedad.sh"
 declare -A DUENO_DE=() ERR_DUENO=() RUTAS_DUENO=() VISTO=()
 ORDEN_DUENOS=()
 while IFS=: read -r NUM TOKEN; do

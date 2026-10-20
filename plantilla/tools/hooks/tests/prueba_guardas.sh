@@ -7,6 +7,8 @@
 set -uo pipefail
 
 RAIZ_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=../requisitos.sh
+source "$RAIZ_SRC/tools/hooks/requisitos.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 FALLOS=0 TOTAL=0
@@ -57,6 +59,31 @@ espera_rechazo "echo >> al tablón bloqueado" "entregar.sh" orden "echo x >> doc
 espera_rechazo "printf >tablón (sin espacio) bloqueado" "entregar.sh" orden "cd docs/direccion && printf x>tablon.md"
 espera_rechazo "tee -a al tablón bloqueado" "entregar.sh" orden "echo x | tee -a docs/direccion/tablon.md"
 espera_ok "leer el tablón permitido" orden "grep coordinador docs/direccion/tablon.md > /tmp/x"
+espera_rechazo "git commit --amend bloqueado (el último commit puede ser de otra sesión)" "amend" orden "git commit --amend --no-edit"
+espera_rechazo "... también abreviado (--amen)" "amend" orden "git commit --amen -m x"
+espera_rechazo "--no-verify abreviado (--no-veri) bloqueado" "no-verify" orden "git commit --no-veri -m x -- a"
+espera_rechazo "git reset --har (abreviatura de --hard) bloqueado" "hard" orden "git reset --har"
+espera_rechazo "git reset HEAD~1 (mueve la rama) bloqueado" "mueve la rama" orden "git reset HEAD~1"
+espera_rechazo "... también con -- sin rutas detrás" "mueve la rama" orden "git reset HEAD~1 --"
+espera_rechazo "git reset --soft bloqueado" "soft" orden "git reset --soft HEAD~1"
+espera_rechazo "git checkout de una carpeta bloqueado" "todo lo que abarca" orden "git checkout HEAD -- docs/"
+espera_rechazo "git restore de una carpeta bloqueado" "todo lo que abarca" orden "git restore -s HEAD -- tools"
+espera_rechazo "git restore con comodín bloqueado" "todo lo que abarca" orden "git restore 'tools/*.sh'"
+espera_rechazo "git checkout -f bloqueado" "descarta los cambios" orden "git checkout -f main"
+espera_rechazo "git switch --discard-changes bloqueado" "descarta los cambios" orden "git switch --discard-changes main"
+espera_ok "git reset -- <ruta> (sacar del índice) permitido" orden "git reset -- docs/a.md"
+espera_ok "git reset <archivo> permitido" orden "git reset docs/direccion/tablon.md"
+espera_ok "git checkout HEAD -- <archivo> permitido" orden "git checkout HEAD -- docs/direccion/plan_nocturno.md"
+espera_ok "git restore --staged <carpeta> (solo el índice) permitido" orden "git restore --staged docs/"
+espera_ok "git checkout -b <rama> permitido" orden "git checkout -b nueva"
+# Lanzadores del motor de este despliegue (su ejecutable por defecto en motor_silencioso.sh), si tiene motor que vigilar
+BIN_MOTOR="$(sed -n 's/^MOTOR_BIN="\${MOTOR_BIN:-\(.*\)}"$/\1/p' tools/motor_silencioso.sh)"
+# shellcheck disable=SC2016
+if [[ -n "$BIN_MOTOR" ]] && bash -c 'source tools/hooks/reglas_comando.sh; _es_motor "$1"' _ "$BIN_MOTOR"; then
+    espera_rechazo "flatpak run del motor bloqueado" "motor" orden "flatpak run org.ejemplo.$BIN_MOTOR --path ."
+    espera_rechazo "open -a del motor (macOS) bloqueado" "motor" orden "open -a /Applications/$BIN_MOTOR.app --args --path ."
+fi
+espera_ok "flatpak run de otro programa permitido" orden "flatpak run org.gimp.GIMP"
 
 echo "== Propiedad al editar (hook PreToolUse de Edit|Write)"
 espera_rechazo "Edit sin rol declarado bloqueado" "Declara antes tu rol" edit "$R/docs/direccion/plan_nocturno.md"
@@ -64,6 +91,12 @@ espera_ok "arranque_rol.sh coordinador registra el rol" orden "./tools/hooks/fij
 espera_ok "coordinador edita su plan" edit "$R/docs/direccion/plan_nocturno.md"
 espera_rechazo "coordinador NO edita un hook (de arquitecto-sistemas)" "no de 'coordinador'" edit "$R/tools/hooks/pre-commit"
 espera_rechazo "ruta sin dueño bloqueada" "no tiene dueño" edit "$R/sin_dueno/x.txt"
+espera_rechazo "ruta con .. que sale de una carpeta propia: cuenta su destino real" "no de 'coordinador'" \
+    edit "$R/docs/direccion/archivo/../../../tools/hooks/pre-commit"
+mkdir -p "$TMP/sin_realpath" && printf '#!/bin/sh\nexit 1\n' > "$TMP/sin_realpath/realpath" && chmod +x "$TMP/sin_realpath/realpath"
+espera_rechazo "... también sin realpath -m (macOS)" "no de 'coordinador'" \
+    env PATH="$TMP/sin_realpath:$PATH" bash -c "$(declare -f json_edit edit); edit '$R/docs/direccion/archivo/../../../tools/hooks/pre-commit'"
+espera_rechazo "Edit dentro de .git bloqueado (core.hooksPath)" "dentro de .git" edit "$R/.git/config"
 espera_rechazo "ni coordinador edita el tablón a mano (lo archiva un script)" "archivar_tablon.sh" edit "$R/docs/direccion/tablon.md"
 espera_ok "fijar_rol.sh auditor-calidad" orden "./tools/hooks/fijar_rol.sh auditor-calidad"
 espera_rechazo "otro rol NO edita el tablón a mano" "entregar.sh" edit "$R/docs/direccion/tablon.md"
@@ -96,6 +129,15 @@ espera_rechazo "commit de ruta ajena rechazado" "no es dueño" \
 printf '%s | coordinador | prueba | ruta | auditor-calidad\n' "2000-01-01 00:00" >> docs/direccion/tablon.md
 espera_rechazo "fila con hora inventada rechazada" "hora real" \
     git commit -m "arquitecto-sistemas: hook" -- tools/hooks/pre-commit docs/direccion/tablon.md
+mkdir -p docs/direccion/roles
+printf '# Memoria\n**Último vaciado:** 2000-01-01 00:00\n' > docs/direccion/roles/memoria_coordinador.md
+printf '# Memoria\n**Último vaciado:** 2000-01-01 00:00\n' > docs/direccion/roles/memoria_auditor-calidad.md
+git add -- docs/direccion/roles/memoria_coordinador.md docs/direccion/roles/memoria_auditor-calidad.md
+espera_ok "commit de la propia memoria sin fila del tablón aceptado" \
+    git commit -m "coordinador: memoria" -- docs/direccion/roles/memoria_coordinador.md
+espera_rechazo "... pero no la memoria de otro rol" "no es dueño" \
+    git commit -m "coordinador: memoria ajena" -- docs/direccion/roles/memoria_auditor-calidad.md
+git rm -q --cached -- docs/direccion/roles/memoria_auditor-calidad.md
 
 echo "== Entregas (entregar.sh y origen de las filas)"
 git checkout -q HEAD -- docs/direccion/tablon.md tools/hooks/pre-commit
@@ -201,6 +243,15 @@ espera_rechazo "GIT_CONFIG_COUNT=... delante bloqueado" "GIT_CONFIG_COUNT" orden
 espera_ok "GIT_CONFIG_NOSYSTEM=1 delante permitido" orden "GIT_CONFIG_NOSYSTEM=1 git status"
 espera_ok "git config core.hooksPath tools/hooks permitido" orden "git config core.hooksPath tools/hooks"
 espera_ok "git config --get core.hooksPath permitido" orden "git config --get core.hooksPath"
+espera_rechazo "export GIT_CONFIG_COUNT=... bloqueado" "GIT_CONFIG_COUNT" \
+    orden "export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null; git commit -m x -- a"
+espera_rechazo "\$env:GIT_CONFIG_COUNT (PowerShell) bloqueado" "GIT_CONFIG_COUNT" orden '$Env:GIT_CONFIG_COUNT = 1'
+espera_ok "export PATH=... permitido" orden "export PATH=/x:/y"
+espera_rechazo "git config include.path bloqueado" "include.path" orden "git config include.path /tmp/x.cfg"
+espera_rechazo "git config core.hooksPath get (el valor \"get\" no es leer) bloqueado" "core.hooksPath" orden "git config core.hooksPath get"
+espera_rechazo "git -c include.path=... bloqueado" "core.hooksPath" orden "git -c include.path=/tmp/x commit -m x -- a"
+espera_rechazo ">> .git/config bloqueado" "configuración de git" orden "echo x >> .git/config"
+espera_rechazo "tee .git/config bloqueado" "configuración de git" orden "echo x | tee -a .git/config"
 
 echo "== Guardas que fallan cerradas (sin python ni node que funcionen)"
 mkdir -p "$TMP/roto"
@@ -211,7 +262,32 @@ espera_rechazo "Bash bloqueado si no se puede leer la llamada" "No se pudo leer"
     env PATH="$TMP/roto:$PATH" bash -c "$(declare -f json_bash orden); orden 'ls'"
 espera_ok "orden con tildes permitida (JSON en UTF-8)" orden "echo canción y añadido"
 
-echo "== Permisos de ejecución en git (proyecto real; en Linux y en la nube, sin +x los hooks se ignoran)"
+echo "== Contexto (línea de estado, aviso al llegar cada mensaje e inicio de sesión)"
+json_estado() { printf '{"session_id":"%s","context_window":{"total_input_tokens":%s,"context_window_size":%s}}' "$1" "$2" "${3:-1000000}"; }
+estado() { json_estado "$@" | env -u CLAUDE_ROL bash tools/hooks/linea_estado.sh; }
+aviso()  { printf '{"session_id":"%s","prompt":"hola"}' "$1" | env -u CLAUDE_ROL bash tools/hooks/aviso_contexto.sh; }
+inicio() { printf '{"session_id":"%s","source":"%s"}' "$1" "$2" | env -u CLAUDE_ROL bash tools/hooks/inicio_sesion.sh; }
+sin_salida() { local d="$1"; shift; if "$@" >"$TMP/salida" 2>&1 && [[ ! -s "$TMP/salida" ]]; then ok "$d"; else mal "$d"; fi; }
+espera_codigo "línea de estado: rol y contexto" 0 "coordinador · contexto 260k/1000k (26 %)" estado S1 260000
+espera_codigo "desde 250k: aviso de vaciado en el siguiente mensaje" 0 "AVISO DE VACIADO" aviso S1
+if grep -q "no te vacíes tú" "$TMP/salida"; then ok "... y al coordinador le dice que no se vacíe solo"; else mal "aviso sin la excepción del coordinador"; fi
+estado S1 160000 >/dev/null
+espera_codigo "desde 150k: aviso informativo" 0 "INFO CONTEXTO" aviso S1
+sin_salida "... una sola vez" aviso S1
+estado S1 1000 >/dev/null
+sin_salida "con poco contexto no avisa" aviso S1
+sin_salida "sesión sin dato de contexto: no avisa ni falla" aviso S-sin-dato
+estado S2 170000 200000 >/dev/null
+espera_codigo "ventana de 200k: el aviso de vaciado salta al 80 %" 0 "AVISO DE VACIADO" aviso S2
+espera_codigo "inicio tras /compact: recuerda el rol registrado" 0 "rol 'coordinador'" inicio S1 compact
+estado S1 260000 >/dev/null; inicio S1 clear >/dev/null
+sin_salida "... y tras /clear olvida el contexto apuntado" aviso S1
+espera_codigo "inicio de una sesión sin rol: que lo pregunte" 0 "aún no tiene rol" inicio S-nueva startup
+espera_codigo "sin python ni node: el aviso no bloquea el mensaje (sale con 0)" 0 "" \
+    env PATH="$TMP/roto:$PATH" bash -c "$(declare -f aviso); aviso S1"
+espera_codigo "... ni la línea de estado" 0 "" env PATH="$TMP/roto:$PATH" bash -c "$(declare -f json_estado estado); estado S1 1"
+
+echo "== Permisos y finales de línea en git (proyecto real; sin +x o con CRLF los hooks no funcionan)"
 if git -C "$RAIZ_SRC" rev-parse --git-dir >/dev/null 2>&1 && [[ -n "$(git -C "$RAIZ_SRC" ls-files -- tools)" ]]; then
     SIN_X=()
     while read -r MODO _ _ RUTA; do
@@ -220,6 +296,13 @@ if git -C "$RAIZ_SRC" rev-parse --git-dir >/dev/null 2>&1 && [[ -n "$(git -C "$R
     printf '%s\n' "${SIN_X[@]}" > "$TMP/salida"
     if (( ${#SIN_X[@]} == 0 )); then ok "los scripts de tools/ tienen +x en git"
     else mal "scripts sin +x en git (arregla con: git update-index --chmod=+x -- <ruta>)"; fi
+    SIN_LF=()
+    while IFS= read -r RUTA; do
+        [[ "$(git -C "$RAIZ_SRC" check-attr eol -- "$RUTA" | sed 's/.*: //')" == lf ]] || SIN_LF+=("$RUTA")
+    done < <(git -C "$RAIZ_SRC" ls-files -- 'tools/*.sh' tools/hooks/pre-commit tools/hooks/commit-msg)
+    printf '%s\n' "${SIN_LF[@]}" > "$TMP/salida"
+    if (( ${#SIN_LF[@]} == 0 )); then ok "los scripts van con eol=lf (.gitattributes): CRLF rompería bash en Windows"
+    else mal "scripts sin eol=lf en .gitattributes (copia el .gitattributes de la plantilla)"; fi
 else
     echo "  (se omite: tools/ aún no está en git)"
 fi

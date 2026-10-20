@@ -7,6 +7,8 @@
 
 set -uo pipefail
 
+# shellcheck source=requisitos.sh
+source "$(dirname "${BASH_SOURCE[0]}")/requisitos.sh"
 RAIZ="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)" || exit 1
 cd "$RAIZ" || exit 1
 TABLON="docs/direccion/tablon.md"

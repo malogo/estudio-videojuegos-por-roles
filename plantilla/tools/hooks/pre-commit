@@ -5,15 +5,18 @@
 # Comprueba en cada commit:
 # 1. Que la entrega lleve su fila en el mismo commit: en docs/direccion/tablon.md o, desde la nube,
 #    en docs/direccion/entregas_nube/<lote>.txt (mismo formato; tools/hooks/volcar_entregas_nube.sh
-#    las pasa al tablón tras fusionar).
+#    las pasa al tablón tras fusionar). Un commit que solo toca memorias de rol no es una entrega: no la lleva.
 # 2. Que las filas añadidas (tablón o entregas_nube) tengan formato correcto y una hora real
 #    (±90 min de ahora, local o {{ZONA_HORARIA}}). En los merges no se exigen 1 ni la hora de 2: las filas vienen
 #    de commits ya validados; tampoco la hora de las filas que se vuelcan de entregas_nube al tablón.
 # 3. Las comprobaciones propias del motor, si existe tools/hooks/pre-commit-motor.sh (se incluye con
 #    "source"; sale con "exit 1" si algo falla). Ejemplos en extras/ de la plantilla (Godot, Unity).
-# 4. Aviso de tamaño de contexto (>=250k vaciar; >=150k vaciar si se va a parar más de 1 h).
+# El aviso de tamaño de contexto ya no va aquí: lo da tools/hooks/aviso_contexto.sh en cada mensaje.
 
 set -euo pipefail
+
+# shellcheck source=propiedad.sh
+source "$(dirname "${BASH_SOURCE[0]}")/propiedad.sh"
 
 TABLON="docs/direccion/tablon.md"
 ENTREGAS="docs/direccion/entregas_nube"
@@ -24,6 +27,7 @@ git rev-parse -q --verify MERGE_HEAD >/dev/null && ES_MERGE=1
 filas_anadidas() {
     git diff --cached -U0 -- "$@" | grep '^+' | grep -v '^+++' | sed 's/^+//' || true
 }
+mapfile -t RUTAS_COMMIT < <(git diff --cached --name-only)
 # .txt de entregas_nube añadidos o modificados en este commit
 mapfile -t TXT_ENTREGAS < <(git diff --cached --name-only --diff-filter=AM -- "$ENTREGAS/*.txt")
 FILAS_TABLON="$(filas_anadidas "$TABLON")"
@@ -34,16 +38,24 @@ FILAS_VOLCADAS="$(git diff --cached -U0 -- "$ENTREGAS/*.txt" | grep '^-' | grep 
 
 es_fila() { [[ -n "${1// /}" && "$1" != \#* ]]; }
 
+# Solo memorias de rol (normas §7): commit-msg comprueba igualmente que cada una sea del rol del commit
+SOLO_MEMORIAS=0
+if (( ${#RUTAS_COMMIT[@]} )); then
+    SOLO_MEMORIAS=1
+    for RUTA in "${RUTAS_COMMIT[@]}"; do [[ "$RUTA" == docs/direccion/roles/memoria_*.md ]] || SOLO_MEMORIAS=0; done
+fi
+
 # 1. Exigir que la fila vaya en el mismo commit que la entrega
-if (( ! ES_MERGE )); then
+if (( ! ES_MERGE && ! SOLO_MEMORIAS )); then
     HAY_FILA=0
-    git diff --cached --name-only | grep -qx "$TABLON" && HAY_FILA=1
+    for RUTA in ${RUTAS_COMMIT[@]+"${RUTAS_COMMIT[@]}"}; do [[ "$RUTA" == "$TABLON" ]] && HAY_FILA=1; done
     while IFS= read -r FILA; do es_fila "$FILA" && HAY_FILA=1; done <<< "$FILAS_NUBE"
     if (( ! HAY_FILA )); then
         echo "[ERROR PRE-COMMIT] La fila de '$TABLON' debe ir en el mismo commit que tu entrega." >&2
         echo "Entrega con una sola orden (añade la fila con la hora real y commitea todo junto):" >&2
         echo "  ./tools/hooks/entregar.sh <rol> \"<qué>\" \"<ruta o commit>\" <destino> -- <tus_rutas>" >&2
         echo "Desde la nube, añade --nube <lote>: la fila va a '$ENTREGAS/<lote>.txt' en lugar del tablón." >&2
+        echo "(Tu memoria de rol sí se commitea sola, sin fila: git commit -m \"<rol>: memoria\" -- docs/direccion/roles/memoria_<rol>.md)" >&2
         exit 1
     fi
 fi
@@ -51,7 +63,7 @@ fi
 # 2. Validar formato y hora de las filas añadidas (no se exige nada a las líneas borradas al archivar)
 # Un archivo con bytes nulos (p. ej. UTF-16 de ">>" en Windows PowerShell 5.1) git lo trata como binario
 # y su diff saldría vacío, así que se rechaza antes.
-for ARCHIVO in "$TABLON" "${TXT_ENTREGAS[@]}"; do
+for ARCHIVO in "$TABLON" ${TXT_ENTREGAS[@]+"${TXT_ENTREGAS[@]}"}; do
     git cat-file -e ":$ARCHIVO" 2>/dev/null || continue
     if [[ "$(git show ":$ARCHIVO" | wc -c)" != "$(git show ":$ARCHIVO" | tr -d '\000' | wc -c)" ]]; then
         echo "[ERROR PRE-COMMIT] '$ARCHIVO' contiene bytes nulos (¿escrito con '>>' desde PowerShell 5.1, que usa UTF-16?)." >&2
@@ -76,11 +88,12 @@ while IFS= read -r FILA; do
     (( ES_MERGE )) && continue
     grep -qxF -- "$FILA" <<< "$FILAS_VOLCADAS" && continue
     # La hora vale leída como local o como la zona del equipo
-    MARCA=$(date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo 0)
+    HORA="${BASH_REMATCH[1]}"
+    MARCA=$(fecha_a_epoch "$HORA" || echo 0)
     MARCA_ZONA=0
-    (( HAY_ZONA )) && MARCA_ZONA=$(TZ="$ZONA" date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo 0)
+    (( HAY_ZONA )) && MARCA_ZONA=$(TZ="$ZONA" fecha_a_epoch "$HORA" || echo 0)
     if (( (MARCA < AHORA - 5400 || MARCA > AHORA + 300) && (MARCA_ZONA < AHORA - 5400 || MARCA_ZONA > AHORA + 300) )); then
-        echo "[ERROR PRE-COMMIT] La fila del tablón no lleva una hora real (${BASH_REMATCH[1]}). Entrega con ./tools/hooks/entregar.sh, que la pone sola." >&2
+        echo "[ERROR PRE-COMMIT] La fila del tablón no lleva una hora real ($HORA). Entrega con ./tools/hooks/entregar.sh, que la pone sola." >&2
         exit 1
     fi
 done < <(printf '%s\n%s\n' "$FILAS_TABLON" "$FILAS_NUBE")
@@ -89,21 +102,5 @@ done < <(printf '%s\n%s\n' "$FILAS_TABLON" "$FILAS_NUBE")
 MOTOR_CHECKS="$(dirname "${BASH_SOURCE[0]}")/pre-commit-motor.sh"
 # shellcheck source=/dev/null
 [[ -f "$MOTOR_CHECKS" ]] && source "$MOTOR_CHECKS"
-
-# 4. Aviso automático de tamaño de contexto (leído desde variable o archivo de estado del runner)
-CONTEXT_FILE="${CLAUDE_CONTEXT_FILE:-.claude_context_tokens}"
-if [[ -f "$CONTEXT_FILE" ]]; then
-    CURRENT_TOKENS="$(tr -d '[:space:]' < "$CONTEXT_FILE")"
-    if [[ ! "$CURRENT_TOKENS" =~ ^[0-9]+$ ]]; then
-        echo "[INFO CONTEXTO] '$CONTEXT_FILE' no contiene un número de tokens; se ignora." >&2
-    elif (( CURRENT_TOKENS >= 250000 )); then
-        echo "==================================================================" >&2
-        echo "[AVISO DE VACIADO] Tu contexto actual es de ${CURRENT_TOKENS} tokens (>250k)." >&2
-        echo "Al cerrar este commit DEBES actualizar tu memoria de rol, avisar y VACIAR la sesión." >&2
-        echo "==================================================================" >&2
-    elif (( CURRENT_TOKENS >= 150000 )); then
-        echo "[INFO CONTEXTO] Contexto en ${CURRENT_TOKENS} tokens. Si vas a parar >1h, vacíate ahora." >&2
-    fi
-fi
 
 exit 0

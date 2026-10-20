@@ -29,8 +29,11 @@
 - El tablón es la única fuente del estado de los lotes; el plan nocturno solo planifica. Estados del plan: `pendiente`, `en curso`, `hecho`, `entregado`, `bloqueado`.
 
 ## 4. Git (árbol compartido)
-- PROHIBIDO: `git stash`, `git add -A`/`.`, `git commit -a`, `git reset --hard`, `git checkout|restore .`, `git clean -f`,
-  `git commit -n`/`--no-verify` y cambiar `core.hooksPath` (con `git config`, `git -c` o `GIT_CONFIG_*`).
+- PROHIBIDO: `git stash`, `git add -A`/`.`, `git commit -a`, `git commit --amend`, `git reset --hard|--soft` y `git reset <commit>`
+  (mueve la rama), `git checkout|restore` de `.`, carpetas o comodines, `git checkout|switch -f`, `git clean -f`,
+  `git commit -n`/`--no-verify`, cambiar `core.hooksPath` (con `git config`, `git -c`, `GIT_CONFIG_*` o `include.path`) y
+  editar nada dentro de `.git/`. Las abreviaturas (`--amen`, `--no-veri`, `--har`) cuentan igual.
+- ¿Te equivocaste en un commit? Haz otro commit que lo corrija: el último commit puede ser de otra sesión.
 - Commit siempre por rutas, con prefijo `<rol>:` y tu fila del tablón: `./tools/hooks/entregar.sh <rol> "<qué>" "<ruta o commit>" <destino> -- <rutas>`
   (commit `<rol>: <qué>` con tus rutas y solo tu fila; `--cuerpo "<línea>"` para la línea de encargo). Toda fila de un commit
   debe tener como origen el rol del commit: las filas ajenas sin commitear las commitea su dueño.
@@ -73,7 +76,9 @@
 ## 7. Contexto y memoria
 - Al llegar a ~250k tokens (o ~150k si vas a parar más de 1 h): volcar estado en `docs/direccion/roles/memoria_<rol>.md`
   (formato de `plantilla_memoria.md`, con `**Último vaciado:** YYYY-MM-DD HH:MM` exacto: `arranque_rol.sh` filtra el tablón por esa fecha),
-  commitear por ruta y pedir vaciado.
+  commitearla sola y sin fila del tablón (`git commit -m "<rol>: memoria" -- docs/direccion/roles/memoria_<rol>.md`) y pedir vaciado.
+- El aviso llega solo: la línea de estado apunta el contexto de cada sesión y `aviso_contexto.sh` lo recuerda en cada
+  mensaje (`[AVISO DE VACIADO]`). Tras `/compact` o `/clear`, `inicio_sesion.sh` te dice el rol que tienes registrado.
 - La memoria se deja en un punto limpio de corte: archivo exacto y estado para retomar sin historial.
 - `coordinador` nunca se vacía por su cuenta: avisa cuando conviene, deja al día `memoria_coordinador.md` y lo vacía la persona responsable.
 

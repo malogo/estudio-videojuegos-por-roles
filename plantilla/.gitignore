@@ -1,6 +1,6 @@
-# Candados (archivos de flock o de PID; ver tools/locks/with_lock.sh) y estado temporal de contexto (nunca se commitean)
+# Candados (archivos de flock o de PID; ver tools/locks/with_lock.sh): nunca se commitean.
+# (El rol y el contexto de cada sesión se guardan dentro de .git: claude_roles/ y claude_contexto/.)
 tools/locks/*.lock
-.claude_context_tokens
 # Salida completa del motor (tools/motor_silencioso.sh guarda los 30 últimos logs)
 .motor_logs/
 

@@ -88,13 +88,58 @@
 - Nada llega a la persona responsable sin pasar por `auditor-calidad`.
 - Un fallo visual o de flujo que se repite se convierte en un detector automático en las rutas de tests.
 - Tope de rondas de corrección: si persiste un fallo estructural, se rehace desde cero.
+- Cada rechazo de `auditor-calidad` se anota siempre igual (así se cuentan):
+  `./tools/hooks/entregar.sh auditor-calidad "Rechazo <lote>: <motivo>" "<ruta o commit>" <rol dueño>`.
+{{#SI NIVEL_AUTONOMIA=bajo}}
+- Rechazos sin tope automático: tras cada uno decide la persona responsable.
+{{#FIN}}
+{{#SI NIVEL_AUTONOMIA=medio,alto}}
+- Tope: con {{MAX_RECHAZOS}} rechazos, el lote pasa a `bloqueado` (§9).
+{{#FIN}}
 
-## 9. Escalado y trabajo nocturno
-- Dudas de alcance, normas nuevas, compras o publicación → `docs/direccion/pendientes_manana.md` y seguir con otra cosa.
+## 9. Nivel de autonomía (`{{NIVEL_AUTONOMIA}}`), escalado y rondas
+- El nivel lo fija la línea «Nivel de autonomía» de `especificaciones.md`; lo cambia `coordinador` con aprobación de la persona responsable.
 - No inventes decisiones de producto: si la especificación no lo dice, se escala.
-- El trabajo sin supervisión sigue `docs/direccion/plan_nocturno.md`. Las rondas las lanza `coordinador` cuando lo pide la persona responsable.
-- Pausas por cuota: `coordinador` las declara en el tablón indicando qué sigue y qué espera.
-- No lances todas las sesiones a la vez sobre la misma tanda.
+- Antes de lanzar la ronda N, `./tools/auditoria/preparacion_ronda.sh N` debe salir con 0. Si no, la ronda no se lanza
+  y lo que falta va a `docs/direccion/pendientes_manana.md`.
+- El trabajo sin supervisión sigue `docs/direccion/plan_nocturno.md`. Pausas por cuota: `coordinador` las declara en el
+  tablón indicando qué sigue y qué espera. No lances todas las sesiones a la vez sobre la misma tanda.
+{{#SI NIVEL_AUTONOMIA=bajo}}
+- Nivel `bajo` (control paso a paso): la persona responsable lanza cada lote, pasa los avisos entre sesiones y hace
+  `/clear` tras cada lote. Basta la §1 de la especificación; lo demás se completa lote a lote.
+- Dudas que la especificación no resuelve (y siempre alcance, normas nuevas, compras o publicación): se preguntan al
+  momento o van a `pendientes_manana.md` y se para.
+{{#FIN}}
+{{#SI NIVEL_AUTONOMIA=medio}}
+- Nivel `medio` (rondas supervisadas): las rondas las lanza `coordinador` cuando lo pide la persona responsable y despierta
+  a los roles hasta que `auditor-calidad` cierra la ronda. Antes de la ronda N, los apartados `(ronda M)` con M ≤ N de
+  §2 y §3 de la especificación están escritos y todos los lotes de la ronda tienen criterio y comando en el plan.
+- Dudas de alcance, normas nuevas, compras o publicación → `pendientes_manana.md`; el lote pasa a `bloqueado` y el rol
+  sigue con su cola.
+- Con {{MAX_RECHAZOS}} rechazos de `auditor-calidad`, el lote pasa a `bloqueado` y se avisa a la persona responsable en `pendientes_manana.md`.
+{{#FIN}}
+{{#SI NIVEL_AUTONOMIA=alto}}
+- Nivel `alto` (flujo desatendido): las rondas las encadena `./tools/despachador.sh`, que lanza la persona responsable
+  desde su terminal (nunca una sesión): una sesión nueva de `claude -p` por lote, con el rol fijado, y otra de
+  `auditor-calidad` si entrega; cada ronda, solo si su puerta sale con 0. Trabaja en una rama `autonomo/<fecha>` sin
+  push ni merge: la persona responsable la revisa al final y la fusiona. Mientras corre, no hay otras sesiones en la carpeta.
+- Se para con un archivo `.parar` en la raíz, que solo crea o borra la persona responsable desde su terminal: el lote en
+  marcha acaba su ciclo y no se lanza otro. Para seguir, se borra y se relanza el despachador (reanuda la rama).
+- Antes de la ronda 1, §1-§4 de la especificación enteras sin marcadores «POR ESCRIBIR», y todas las rondas del plan con
+  criterio, comando y dependencias («tras X») que existen; la cuota, como `**Cuota:** <n> USD por ronda` en la cabecera
+  del plan (coste estimado de las sesiones: al agotarse, el despachador declara la pausa en el tablón y para).
+- Ningún lote que consuma un contrato de §3 pasa a `en curso` si su contrato no está firmado.
+- En una sesión del despachador: el lote se entrega con `./tools/hooks/entregar.sh <rol> "Lote <id>: <resumen>" "<ruta o
+  commit>" auditor-calidad -- <rutas>` y `auditor-calidad` deja una sola fila: `"Validado <id>: <qué comprobaste>"` hacia
+  `coordinador` o la de rechazo (§8). Sin push, merge ni cambios de rama (las guardas los bloquean).
+- Dudas técnicas internas: las decide el rol con los criterios de §4 de la especificación (las de gestión, como
+  `coordinador`) y las apunta en su memoria. Solo se escala lo que implica compras, licencias/NDA o cambiar la visión o
+  el alcance: fila `"Duda <id>: <pregunta>"` hacia `coordinador` y se termina la sesión; el despachador pasa el lote a
+  `bloqueado` (y lo que va tras él), copia la pregunta en `pendientes_manana.md` y sigue.
+- Con {{MAX_RECHAZOS}} intentos sin validar (rechazos de `auditor-calidad` o sesiones sin entrega), el despachador pasa el
+  lote a `bloqueado` sin esperar a nadie (queda anotado en `pendientes_manana.md`) y sigue con el siguiente.
+- Contexto: cada lote empieza en una sesión nueva; no se arrastra contexto entre lotes.
+{{#FIN}}
 
 ## 10. Producto (recordatorio mínimo)
 - {{MOTOR}}; plataformas: {{PLATAFORMAS}}.

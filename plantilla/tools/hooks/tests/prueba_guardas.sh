@@ -46,7 +46,8 @@ git config core.hooksPath tools/hooks
 json_edit() { printf '{"session_id":"S1","tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$1"; }
 json_bash() { printf '{"session_id":"S1","tool_name":"Bash","tool_input":{"command":"%s"}}' "$1"; }
 edit()  { json_edit "$1" | env -u CLAUDE_ROL bash tools/hooks/guard_propiedad.sh; }
-orden() { json_bash "$1" | env -u CLAUDE_ROL bash tools/hooks/pre_tool_guard.sh; }
+orden() { json_bash "$1" | env -u CLAUDE_ROL -u DESPACHADOR bash tools/hooks/pre_tool_guard.sh; }
+orden_despachador() { json_bash "$1" | env -u CLAUDE_ROL DESPACHADOR=1 bash tools/hooks/pre_tool_guard.sh; }  # sesión del despachador
 
 echo "== Órdenes (hook PreToolUse)"
 espera_rechazo "git add -A bloqueado" "Prohibido" orden "git add -A"
@@ -84,6 +85,32 @@ if [[ -n "$BIN_MOTOR" ]] && bash -c 'source tools/hooks/reglas_comando.sh; _es_m
     espera_rechazo "open -a del motor (macOS) bloqueado" "motor" orden "open -a /Applications/$BIN_MOTOR.app --args --path ."
 fi
 espera_ok "flatpak run de otro programa permitido" orden "flatpak run org.gimp.GIMP"
+# .parar (interruptor de parada del despachador): solo lo crea o lo borra la persona responsable
+espera_rechazo "rm .parar bloqueado" ".parar" orden "rm -f ./.parar"
+espera_rechazo "touch .parar bloqueado" ".parar" orden "touch .parar"
+espera_rechazo "mv .parar bloqueado" ".parar" orden "mv .parar /tmp/x"
+espera_rechazo "echo > .parar bloqueado" ".parar" orden "echo x > .parar"
+espera_rechazo "tee .parar bloqueado" ".parar" orden "echo x | tee .parar"
+espera_ok "leer .parar permitido" orden "cat .parar"
+# Sesiones del despachador (DESPACHADOR=1): sin publicar, fusionar ni cambiar de rama, ni otro despachador
+espera_ok "git push sin DESPACHADOR no lo bloquea esta regla" orden "git push origin x"
+espera_rechazo "git push con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git push origin x"
+espera_rechazo "git -C . push tras cd con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "cd docs && git -C .. push"
+espera_rechazo "git pull con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git pull"
+espera_rechazo "git merge con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git merge main"
+espera_rechazo "git rebase con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git rebase main"
+espera_rechazo "git switch con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git switch main"
+espera_rechazo "git checkout -qb con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git checkout -qb nueva"
+espera_rechazo "git checkout --orphan con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git checkout --orphan nueva"
+espera_ok "git checkout HEAD -- <archivo> con DESPACHADOR=1 permitido" orden_despachador "git checkout HEAD -- docs/direccion/plan_nocturno.md"
+espera_rechazo "git branch <nueva> con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git branch nueva"
+espera_rechazo "git branch -D con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git branch -D x"
+espera_ok "git branch --show-current con DESPACHADOR=1 permitido" orden_despachador "git branch --show-current"
+espera_ok "git branch -a -v con DESPACHADOR=1 permitido" orden_despachador "git branch -a -v"
+espera_ok "git branch --list <patrón> con DESPACHADOR=1 permitido" orden_despachador "git branch --list autonomo/*"
+espera_rechazo "lanzar el despachador con DESPACHADOR=1 bloqueado" "despachador" orden_despachador "./tools/despachador.sh --simular"
+espera_rechazo "bash tools/despachador.sh con DESPACHADOR=1 bloqueado" "despachador" orden_despachador "bash tools/despachador.sh"
+espera_ok "leer el despachador con DESPACHADOR=1 permitido" orden_despachador "grep ronda tools/despachador.sh"
 
 echo "== Propiedad al editar (hook PreToolUse de Edit|Write)"
 espera_rechazo "Edit sin rol declarado bloqueado" "Declara antes tu rol" edit "$R/docs/direccion/plan_nocturno.md"
@@ -353,11 +380,13 @@ for MODO in pid flock; do
     if [[ ! -s "$TMP/doble" && -s "$TMP/entraron" ]]; then ok "[$MODO] 20 a la vez: uno dentro ($(wc -l < "$TMP/entraron" | tr -d ' ') en total, nunca dos)"
     else : > "$TMP/salida"; mal "[$MODO] 20 a la vez: dos dentro a la vez o ninguno"; fi
 
-    # kill -9 al envoltorio con el comando vivo: el candado dura lo que dure el comando
-    $CL "${L}3" arquitecto-sistemas sleep 1.5 & W=$!
+    # kill -9 al envoltorio con el comando vivo: el candado dura lo que dure el comando. Comando largo que se mata
+    # tras comprobarlo: con "sleep 1.5", en Git Bash el comando ya había acabado al llegar a la comprobación.
+    $CL "${L}3" arquitecto-sistemas sleep 30 & W=$!
     H="$(pid_comando "${L}3")"
     kill -9 "$W"; wait "$W" 2>/dev/null
     espera_codigo "[$MODO] kill -9 al envoltorio: ocupado mientras viva el comando" 75 "LOCK OCUPADO" $CL "${L}3" coordinador true
+    kill "$H" 2>/dev/null
     esperar_muerte "$H"
     espera_ok "[$MODO] ... y libre cuando el comando acaba" $CL "${L}3" coordinador true
 
@@ -432,6 +461,236 @@ $MS auditor-calidad >/dev/null 2>&1
 N_LOGS=$(find .motor_logs -name '*.log' | wc -l | tr -d ' ')
 if (( N_LOGS == 30 )); then ok "se guardan los 30 últimos logs"; else : > "$TMP/salida"; mal "se guardan $N_LOGS logs (se esperaban 30)"; fi
 unset MOTOR_BIN MOTOR_REGEX_ERRORES
+
+echo "== Preparación de rondas (preparacion_ronda.sh) y su parte de la auditoría"
+# Especificación y plan sintéticos en otro repo temporal (sin tocar el proyecto)
+mkdir -p "$TMP/ronda/docs/direccion" && cd "$TMP/ronda" || exit 1
+git init -q . && cp -r "$RAIZ_SRC/tools" . && rm -f tools/locks/*.lock
+PR=./tools/auditoria/preparacion_ronda.sh
+CONTRATO_SALTO=$'### Contrato: salto (ronda 1)\n- señal saltado(altura) · arquitecto-sistemas · coordinador'
+espec() {  # espec <nivel> <§2> <primera línea de §4> [<§3> [<tope de rechazos>]]
+    printf '# Especificación\n**Nivel de autonomía:** `%s`\n\n## 1. Visión General\n- Juego de prueba.\n\n## 2. Mecánicas y Sistemas\n%s\n\n## 3. Arquitectura Técnica y Contratos entre Roles\n%s\n\n## 4. Criterios de Desempate y Topes\n%s\n- Rechazos de `auditor-calidad` por lote antes de `bloqueado`: %s.\n\n## 5. Estructura de Carpetas por Dueño\n- propiedad.tsv\n' \
+        "$1" "$2" "${4:-$CONTRATO_SALTO}" "$3" "${5:-3}" > docs/direccion/especificaciones.md
+}
+plan() {  # plan <cuota> <filas...>
+    { printf '# Plan\n**Ventana:** x | **Cuota:** %s\n\n| # | Rol | Lote | Criterio de hecho | Comando de comprobación | Estado |\n|---|---|---|---|---|---|\n' "$1"
+      shift; printf '%s\n' "$@"; } > docs/direccion/plan_nocturno.md
+}
+lote() {  # lote <id> <ronda y dependencias> <comando> [estado]
+    printf '| 1 | arquitecto-sistemas | **%s** (%s). Lote de prueba. | Pasa sus tests. | `%s` | %s |' "$1" "$2" "$3" "${4:-pendiente}"
+}
+SALTO=$'### Salto (ronda 1)\n- Altura: 3 casillas; sin doble salto.'
+SALTO_POR=$'### Salto (ronda 1)\n- (POR ESCRIBIR: altura y casos borde)'
+MENU_POR=$'### Menú (ronda 2)\n- (POR ESCRIBIR: opciones)'
+DESEMPATE="- Prioridad: simplicidad > rendimiento > flexibilidad."
+espec bajo "$SALTO_POR" "- Prioridad: (POR ESCRIBIR: x)"
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+espera_codigo "[bajo] lote con criterio y comando: lista" 0 "lista para lanzar" $PR 1 --raiz .
+plan "a decidir" "$(lote A1 "ronda 1" "./tools/motor_silencioso.sh arquitecto-sistemas ...")"
+espera_codigo "[bajo] comando con '...': no lista" 1 "comando" $PR 1
+espec medio "$SALTO" "$DESEMPATE"
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+espera_codigo "[medio] ronda 1 con su sistema escrito: lista" 0 "lista para lanzar" $PR 1
+espec medio "$SALTO_POR" "$DESEMPATE"
+espera_codigo "[medio] apartado (ronda 1) con «POR ESCRIBIR»: no lista" 1 "ronda 1 con «POR ESCRIBIR»" $PR 1
+espec medio "$SALTO"$'\n'"$MENU_POR" "$DESEMPATE"
+espera_codigo "[medio] un apartado (ronda 2) pendiente no impide la ronda 1" 0 "lista para lanzar" $PR 1
+espec medio "$SALTO" "$DESEMPATE"
+plan "a decidir" "$(lote A1 "ronda 1, contrato: Salto" ./tests/salto.sh)"
+espera_codigo "contrato: con otras mayúsculas y sin su (ronda M), firmado: lista" 0 "lista para lanzar" $PR 1
+plan "a decidir" "$(lote A1 "ronda 1, contrato: menú" ./tests/salto.sh)"
+espera_codigo "contrato: sin apartado en §3: no lista" 1 "no tiene apartado «### Contrato: menú»" $PR 1
+espec medio "$SALTO" "$DESEMPATE" $'### Contrato: salto (ronda 1)\n- (POR ESCRIBIR: señales)'
+plan "a decidir" "$(lote A1 "ronda 1, contrato: salto" ./tests/salto.sh)"
+espera_codigo "contrato: sin firmar: no lista" 1 "sin firmar" $PR 1
+espec alto "$SALTO" "- Prioridad: (POR ESCRIBIR: x)"
+plan "100 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+espera_codigo "[alto] §4 con «POR ESCRIBIR»: no lista" 1 "(§4)" $PR 1
+espec alto "$SALTO" "$DESEMPATE"
+plan "100 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras Z9" ./tests/menu.sh)"
+espera_codigo "[alto] «tras Z9» que no existe: no lista" 1 "Z9" $PR 1
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+espera_codigo "[alto] cuota «a decidir»: no lista" 1 "Cuota" $PR 1
+plan "100 euros por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+espera_codigo "[alto] cuota sin «USD por ronda»: no lista" 1 "USD por ronda" $PR 1
+plan "12,5 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+espera_codigo "[alto] todo completo (cuota con decimales): lista" 0 "lista para lanzar" $PR 1
+espec altisimo "$SALTO" "$DESEMPATE"
+espera_codigo "nivel ilegible -> 2" 2 "ilegible" $PR 1
+espera_codigo "sin número de ronda -> 64" 64 "Uso" $PR
+# Auditoría: ronda en curso sin preparar, tope de rechazos y nivel distinto en normas
+printf '# Pendientes\n' > docs/direccion/pendientes_manana.md
+mkdir -p docs/direccion/roles
+for r in "${ROLES_P[@]}"; do printf '# Ficha\n## Dueño Exclusivo de Archivos\n- `%s/**`\n' "$r" > "docs/direccion/roles/$r.md"; done
+normas() { printf '# Normas\n## 9. Nivel de autonomía (`%s`), escalado y rondas\n' "$1" > docs/direccion/normas_comunes.md; }
+rechazo() { printf '%s | auditor-calidad | Rechazo A1: %s | tests/ | arquitecto-sistemas\n' "$(date "+%Y-%m-%d %H:%M")" "$1"; }
+auditar() { bash tools/auditoria/auditoria_proceso.sh --raiz . --informe "$TMP/informe.md" --excepciones "$TMP/sin_excepciones"; }
+en_informe() {  # en_informe <descripción> <texto>
+    if grep -q -- "$2" "$TMP/informe.md"; then ok "$1"; else cp "$TMP/informe.md" "$TMP/salida"; mal "$1"; fi
+}
+normas medio
+printf '# tablón\n%s | coordinador | Lote A1: salto | plan | arquitecto-sistemas\n' "$(date "+%Y-%m-%d %H:%M")" > docs/direccion/tablon.md
+espec medio "$SALTO_POR" "$DESEMPATE"
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh "en curso")"
+espera_codigo "auditoría: ronda en curso sin preparar -> hallazgo en la sección 6" 1 "6. Rondas en curso y nivel de autonomía: 1" auditar
+en_informe "... que nombra la ronda y su primera falta" "ronda 1 tiene lotes \`en curso\` sin estar preparada"
+espec medio "$SALTO" "$DESEMPATE"
+{ rechazo uno; rechazo dos; rechazo tres; } >> docs/direccion/tablon.md
+espera_codigo "auditoría: 3 rechazos de un lote no bloqueado -> hallazgo en la sección 4" 1 "4. Plan nocturno frente al tablón: 1" auditar
+en_informe "... con el número de rechazos y el tope" "lleva 3 rechazos de auditor-calidad (tope 3)"
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh bloqueado)" "$(lote B1 "ronda 2" ./tests/menu.sh)"
+espera_codigo "... y ninguno si el lote ya está bloqueado (ni por B1, pendiente y aún fuera del tablón)" 0 \
+    "4. Plan nocturno frente al tablón: 0" auditar
+normas alto
+espera_codigo "auditoría: nivel distinto en la especificación y en normas §9 -> hallazgo" 1 "6. Rondas en curso y nivel de autonomía: 1" auditar
+en_informe "... que dice los dos niveles" "(\`medio\`) no coincide con el de la cabecera de §9 de las normas (\`alto\`)"
+cd "$R" || exit 1
+
+echo "== Despachador del nivel alto (tools/despachador.sh con tools/hooks/tests/claude_falso.sh)"
+# Un repo temporal por escenario, en nivel alto y en la rama principal; el guion dice qué hace cada sesión falsa
+RP="$(sed -n 's/^RAMA_PRINCIPAL="\(.*\)"$/\1/p' tools/despachador.sh)"
+export DESPACHADOR_CLAUDE=./tools/hooks/tests/claude_falso.sh
+DP=./tools/despachador.sh
+escenario() {  # escenario <nombre> <tope de intentos> <cuota> <filas del plan...>
+    local d="$TMP/desp_$1" t="$2" c="$3"
+    shift 3
+    mkdir -p "$d/docs/direccion/roles" && cd "$d" || exit 1
+    git init -q . && git symbolic-ref HEAD "refs/heads/$RP"
+    git config user.name prueba && git config user.email prueba@example.invalid
+    cp -r "$RAIZ_SRC/tools" . && rm -f tools/locks/*.lock
+    cp "$RAIZ_SRC/.gitignore" .
+    espec alto "$SALTO"$'\n'$'### Menú (ronda 2)\n- Tres opciones.' "$DESEMPATE" "$CONTRATO_SALTO" "$t"
+    plan "$c" "$@"
+    normas alto
+    printf '# tablón\n' > docs/direccion/tablon.md
+    printf '# Pendientes\n\n## Abiertos\n' > docs/direccion/pendientes_manana.md
+    for r in "${ROLES_P[@]}"; do printf '# Ficha\n## Dueño Exclusivo de Archivos\n- `%s/**`\n' "$r" > "docs/direccion/roles/$r.md"; done
+    git add -- . && git commit -q -m "coordinador: base"
+    git config core.hooksPath tools/hooks
+    export CLAUDE_FALSO_GUION="$d.guion" CLAUDE_FALSO_ARGS="$d.args"
+    rm -f "$CLAUDE_FALSO_GUION" "$CLAUDE_FALSO_GUION.n" "$CLAUDE_FALSO_ARGS"
+}
+guion() { printf '%s\n' "$@" >> "$CLAUDE_FALSO_GUION"; }
+sesiones() { cat "$CLAUDE_FALSO_GUION.n" 2>/dev/null || echo 0; }
+estado_de() { grep -F "**$1**" docs/direccion/plan_nocturno.md | awk -F'|' '{ gsub(/^ +| +$/, "", $7); print $7 }'; }
+espera_estado() {  # espera_estado <descripción> <lote> <estado>
+    local e; e="$(estado_de "$2")"
+    if [[ "$e" == "$3" ]]; then ok "$1"; else echo "estado de $2: '$e' (se esperaba '$3')" > "$TMP/salida"; mal "$1"; fi
+}
+espera_en() {  # espera_en <descripción> <archivo> <texto fijo>
+    if grep -qF -- "$3" "$2"; then ok "$1"; else { echo "falta «$3» en $2:"; cat "$2"; } > "$TMP/salida" 2>&1; mal "$1"; fi
+}
+arbol_limpio() { [[ -z "$(git status --porcelain --untracked-files=all)" ]]; }
+
+escenario hecho 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+BASE="$(git rev-parse HEAD)"
+guion "arquitecto-sistemas entrega" "auditor-calidad valida" "arquitecto-sistemas entrega" "auditor-calidad valida"
+espera_codigo "dos rondas con lotes validados -> 0" 0 "Hechos: A1, B1" $DP
+espera_estado "... A1 hecho en el plan" A1 hecho
+espera_estado "... y B1 (ronda 2, tras A1) también" B1 hecho
+RAMA_D="$(git symbolic-ref --short HEAD)"
+if [[ "$RAMA_D" == autonomo/* && "$(git rev-parse "$RP")" == "$BASE" ]]; then ok "... en una rama autonomo/... sin tocar $RP"
+else echo "rama $RAMA_D; $RP en $(git rev-parse "$RP")" > "$TMP/salida"; mal "... en una rama autonomo/... sin tocar $RP"; fi
+L1="$(head -n1 "$CLAUDE_FALSO_ARGS")"
+if [[ "$L1" == "CLAUDE_ROL=arquitecto-sistemas DESPACHADOR=1 "* && "$L1" == *"[--permission-mode] [dontAsk]"* \
+      && "$L1" == *"[--max-turns] [80]"* && "$L1" == *"[--max-budget-usd] [10.00]"* && "$L1" == *"[--output-format] [json]"* \
+      && "$L1" == *"[--no-session-persistence]"* && "$L1" == *"Agent(agente-ejecutor-lote)"* \
+      && "$L1" == *"Bash(./tools/despachador.sh*)"* && "$L1" != *bypass* && "$L1" != *--bare* ]]; then
+    ok "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1 y las opciones de claude del ADR"
+else echo "$L1" > "$TMP/salida"; mal "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1 y las opciones de claude del ADR"; fi
+if sed -n 2p "$CLAUDE_FALSO_ARGS" | grep -q "^CLAUDE_ROL=auditor-calidad " && [[ "$(sesiones)" == 4 ]]; then
+    ok "... una sesión del rol y otra de auditor-calidad por lote"
+else cp "$CLAUDE_FALSO_ARGS" "$TMP/salida"; mal "... una sesión del rol y otra de auditor-calidad por lote"; fi
+espera_en "... con su fila Encargo en el tablón" docs/direccion/tablon.md "| coordinador | Encargo A1 (ronda 1, intento 1): A1 (ronda 1). Lote de prueba. |"
+espera_en "... y su fila Estado hacia la persona responsable" docs/direccion/tablon.md "| coordinador | Estado B1: hecho | docs/direccion/plan_nocturno.md | persona responsable"
+if arbol_limpio; then ok "... y el árbol limpio al acabar"; else git status --short > "$TMP/salida"; mal "... y el árbol limpio al acabar"; fi
+espera_en "... con resumen en .despachador_logs" "$(ls -d .despachador_logs/*/ | tail -n1)resumen.md" "Para revisar: \`git log --oneline $RP..$RAMA_D\`"
+
+escenario rechazo 2 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas entrega" "auditor-calidad rechaza" "arquitecto-sistemas entrega" "auditor-calidad rechaza"
+espera_codigo "rechazado hasta el tope (2) -> 0 y bloqueado" 0 "Bloqueados: A1" $DP
+espera_estado "... A1 bloqueado en el plan" A1 bloqueado
+espera_en "... con su entrada en pendientes_manana.md" docs/direccion/pendientes_manana.md "Lote A1 bloqueado tras 2 intentos sin validar (tope 2)"
+if grep -q "intento 2.*auditor-calidad lo rechazó: no cumple el criterio" "$CLAUDE_FALSO_ARGS"; then ok "... y el segundo intento lleva el motivo del rechazo"
+else cp "$CLAUDE_FALSO_ARGS" "$TMP/salida"; mal "... y el segundo intento lleva el motivo del rechazo"; fi
+N_PEND=0
+for C in $(git rev-list HEAD -- docs/direccion/plan_nocturno.md); do
+    git show "$C:docs/direccion/plan_nocturno.md" | grep -F '**A1**' | grep -q '| pendiente |' && N_PEND=$((N_PEND + 1))
+done
+if (( N_PEND == 1 )); then ok "... sin volver nunca a pendiente entre intentos (sigue en curso)"
+else git log --oneline > "$TMP/salida"; mal "... sin volver nunca a pendiente entre intentos (sigue en curso)"; fi
+
+escenario sucio 1 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas sucio"
+espera_codigo "sesión sin fila que deja archivos sin commitear -> Fallo y bloqueado (tope 1)" 0 "Bloqueados: A1" $DP
+espera_en "... con su fila Fallo" docs/direccion/tablon.md "| coordinador | Fallo A1: la sesión de arquitecto-sistemas no dejó entrega ni duda"
+S="$(ls -d .despachador_logs/*/ | tail -n1)sobras/r1_A1_arquitecto-sistemas_1"
+if [[ -f "$S/tools/hooks/sobra_falsa.txt" && -f "$S/tools/hooks/tests/motor_falso.sh" ]] && arbol_limpio \
+    && [[ ! -e tools/hooks/sobra_falsa.txt ]] && git diff --quiet HEAD -- tools/hooks/tests/motor_falso.sh; then
+    ok "... sus sobras copiadas en sobras/ y deshechas (árbol limpio)"
+else { git status --short; ls -R .despachador_logs; } > "$TMP/salida" 2>&1; mal "... sus sobras copiadas en sobras/ y deshechas (árbol limpio)"; fi
+
+escenario duda 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote A2 "ronda 1, tras A1" ./tests/menu.sh)"
+guion "arquitecto-sistemas duda"
+espera_codigo "duda -> 0, lote bloqueado" 0 "Bloqueados: A1: duda de arquitecto-sistemas, A2" $DP
+espera_estado "... A1 bloqueado" A1 bloqueado
+espera_estado "... y A2 (tras A1) bloqueado por dependencia" A2 bloqueado
+espera_en "... con la pregunta en pendientes_manana.md" docs/direccion/pendientes_manana.md "¿cuántas casillas sube el salto? (falsa)"
+
+escenario parar 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+guion "arquitecto-sistemas entrega+parar" "auditor-calidad valida"
+espera_codigo ".parar durante un lote -> acaba su ciclo y sale con 1" 1 "parado: parada con .parar" $DP
+espera_estado "... A1 hecho" A1 hecho
+espera_estado "... y B1 sin lanzar (pendiente)" B1 pendiente
+espera_en "... con la pausa en el tablón" docs/direccion/tablon.md "| coordinador | Pausa (ronda 2): parada con .parar; sigue B1 |"
+RAMA_D="$(git symbolic-ref --short HEAD)"
+espera_codigo "con .parar no arranca -> 2" 2 "existe .parar" $DP
+rm -f .parar
+guion "arquitecto-sistemas entrega" "auditor-calidad valida"
+espera_codigo "sin .parar se reanuda -> 0" 0 "Reanudando la rama $RAMA_D" $DP
+espera_estado "... B1 hecho en la misma rama" B1 hecho
+if [[ "$(git branch --list 'autonomo/*' | wc -l | tr -d ' ')" == 1 ]]; then ok "... sin crear otra rama"; else git branch > "$TMP/salida"; mal "... sin crear otra rama"; fi
+
+escenario cuota 3 "1 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote A2 "ronda 1" ./tests/menu.sh)"
+guion "arquitecto-sistemas entrega 0.7" "auditor-calidad valida 0.5"
+espera_codigo "cuota de 1 USD con sesiones de 0.7 y 0.5 -> pausa y 1" 1 "cuota de la ronda agotada" $DP
+if sed -n 2p "$CLAUDE_FALSO_ARGS" | grep -qF "[--max-budget-usd] [0.30]"; then ok "... auditor-calidad recibió lo que quedaba (0.30 USD)"
+else cp "$CLAUDE_FALSO_ARGS" "$TMP/salida"; mal "... auditor-calidad recibió lo que quedaba (0.30 USD)"; fi
+espera_estado "... A1 hecho" A1 hecho
+espera_estado "... y A2 sin lanzar" A2 pendiente
+espera_en "... con la pausa en el tablón" docs/direccion/tablon.md "Pausa (ronda 1): cuota de la ronda agotada (1.20 de 1 USD, estimado); sigue A2"
+
+escenario tiempo 1 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas lento"
+espera_codigo "sesión que pasa de DESPACHADOR_TIEMPO_MAX -> se mata y cuenta como fallo" 0 "Bloqueados: A1" env DESPACHADOR_TIEMPO_MAX=2 $DP
+espera_en "... Fallo por tiempo agotado" docs/direccion/tablon.md "tiempo agotado (2 s)"
+
+escenario candado 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+$CL motor arquitecto-sistemas sleep 30 & W=$!
+H="$(pid_comando motor)"
+espera_codigo "candado del motor ocupado -> se pospone y luego Fallo sin lanzar sesión" 0 "Sin lanzar: A1 (candado motor ocupado)" $DP
+if [[ "$(sesiones)" == 0 ]]; then ok "... sin lanzar ninguna sesión"; else mal "... sin lanzar ninguna sesión"; fi
+espera_en "... con su fila Fallo" docs/direccion/tablon.md "Fallo A1: el candado «motor» seguía ocupado"
+$CL despachador coordinador sleep 30 & W2=$!
+H2="$(pid_comando despachador)"
+espera_codigo "segundo despachador -> 75" 75 "LOCK OCUPADO" $DP
+kill "$H" "$H2" 2>/dev/null; wait "$W" "$W2" 2>/dev/null
+
+escenario simular 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+BASE="$(git rev-parse HEAD)"
+espera_codigo "--simular -> 0 y dice qué lanzaría" 0 "Lanzaría A1 (arquitecto-sistemas), ronda 1, intento 1 de 3" $DP --simular
+if [[ "$(git rev-parse HEAD)" == "$BASE" && "$(git symbolic-ref --short HEAD)" == "$RP" && "$(sesiones)" == 0 ]] && arbol_limpio \
+    && [[ ! -e .despachador_logs ]]; then ok "... sin commits, sin rama, sin sesiones y sin registro"
+else { git log --oneline; git status --short; } > "$TMP/salida"; mal "... sin commits, sin rama, sin sesiones y sin registro"; fi
+echo "x" > docs/direccion/notas.md
+espera_codigo "árbol sucio al arrancar -> 2" 2 "no está limpio" $DP
+rm -f docs/direccion/notas.md
+espera_codigo "claude sin las opciones que usa -> 2" 2 "no tiene --permission-mode" env DESPACHADOR_CLAUDE=true $DP
+espec medio "$SALTO" "$DESEMPATE"
+espera_codigo "nivel medio -> 2" 2 "solo para el nivel alto" $DP --simular
+espera_codigo "argumento desconocido -> 64" 64 "Uso" $DP --rapido
+unset DESPACHADOR_CLAUDE CLAUDE_FALSO_GUION CLAUDE_FALSO_ARGS
+cd "$R" || exit 1
 
 echo "== Resultado: $((TOTAL - FALLOS))/$TOTAL pruebas OK"
 (( FALLOS == 0 ))

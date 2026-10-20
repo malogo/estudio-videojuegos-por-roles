@@ -15,9 +15,18 @@
 - Convierte cualquier fallo visual o de flujo que se repita en un detector automático.
 - Hace la auditoría de proceso con `./tools/auditoria/auditoria_proceso.sh` (informe en `docs/calidad/`) y anota cada
   hallazgo en el tablón hacia su dueño (o hacia `coordinador` si es de gestión).
+{{#SI NIVEL_AUTONOMIA=alto}}
+- En cada revisión que le encarga el despachador deja una sola fila: si el lote cumple,
+  `./tools/hooks/entregar.sh auditor-calidad "Validado <lote>: <qué comprobaste>" "<commit>" coordinador`; si no, la de rechazo.
+{{#FIN}}
 
 ## Qué NO HACE
 - Nunca repara archivos de otros dueños: anota el rechazo en el tablón y despierta al dueño.
+  El rechazo va siempre con esta forma, para poder contarlos:
+  `./tools/hooks/entregar.sh auditor-calidad "Rechazo <lote>: <motivo>" "<ruta o commit>" <rol dueño>`.
+{{#SI NIVEL_AUTONOMIA=medio,alto}}
+- Al llegar un lote a {{MAX_RECHAZOS}} rechazos no lo vuelve a revisar: avisa a `coordinador` para que lo pase a `bloqueado`.
+{{#FIN}}
 
 ## A quién entrega
 - A la persona responsable (entregas validadas) o devuelve al rol dueño si falla la puerta de calidad.

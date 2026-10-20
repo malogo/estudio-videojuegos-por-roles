@@ -11,6 +11,14 @@ Reglas de los marcadores (ver cuestionario.md):
   - ROLES (lista): en el texto se escribe separada por espacios; además, cada línea con {{ROL}} se repite por rol.
   - FECHA_DESPLIEGUE: si no viene, la hora actual en ZONA_HORARIA.
   - MOTOR_EXTRA: "godot", "unity" o "" -> copia extras/<motor>/* a tools/hooks/ (pre-commit-motor.sh, etc.).
+  - NIVEL_AUTONOMIA: "bajo", "medio" o "alto"; MAX_RECHAZOS: entero >= 1. Si faltan (valores.json de antes),
+    se usan "medio" y "3" con un aviso.
+Bloques condicionales (en todos los archivos de plantilla/ y de extras/, antes de los marcadores):
+  {{#SI NIVEL_AUTONOMIA=medio,alto}}
+  ... líneas que solo van si la clave (de texto) vale una de las opciones; pueden llevar otros marcadores ...
+  {{#FIN}}
+  Cada marcador de bloque va solo en su línea y desaparece al rellenar. Sin anidar. Bloque sin cerrar, {{#FIN}}
+  suelto, bloques anidados o clave inexistente o que no sea texto: error.
 Fichas: solo se copian las de roles en ROLES; un rol sin ficha la recibe de plantilla_ficha.md con {{COMPLETAR}}.
 Memorias: una memoria_<rol>.md por rol. propiedad.tsv pierde las filas de roles que no estén en ROLES.
 No sobrescribe archivos que ya existan en el destino.
@@ -30,6 +38,11 @@ import sys
 AQUI = os.path.dirname(os.path.abspath(__file__))
 MARCADOR = re.compile(r"\{\{([A-Z_]+)(?::[^}]*)?\}\}")
 ROLES_OBLIGATORIOS = ["coordinador", "arquitecto-sistemas", "auditor-calidad"]
+BLOQUE_SI = re.compile(r"^\s*\{\{#SI ([A-Z_]+)=([^}]*)\}\}\s*$")
+BLOQUE_FIN = re.compile(r"^\s*\{\{#FIN\}\}\s*$")
+NIVELES = ["bajo", "medio", "alto"]
+# Claves nuevas con valor por defecto: un valores.json de antes sigue valiendo (actualizar.md)
+DEFECTOS = {"NIVEL_AUTONOMIA": "medio", "MAX_RECHAZOS": "3"}
 
 
 def ahora_en(zona):
@@ -38,6 +51,45 @@ def ahora_en(zona):
         return datetime.datetime.now(ZoneInfo(zona)).strftime("%Y-%m-%d %H:%M")
     except Exception:
         return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+def aplicar_bloques(texto, valores, nombre):
+    """Quita los bloques {{#SI CLAVE=a,b}} ... {{#FIN}} cuya clave no vale a ni b, y las líneas de los marcadores."""
+    salida, abierto, dentro = [], 0, True
+    for n, linea in enumerate(texto.split("\n"), 1):
+        m = BLOQUE_SI.match(linea)
+        if m:
+            if abierto:
+                raise SystemExit(f"{nombre}:{n}: bloque {{{{#SI}}}} dentro de otro (abierto en la línea {abierto}); no se admiten anidados")
+            clave, opciones = m.group(1), [o.strip() for o in m.group(2).split(",")]
+            if not isinstance(valores.get(clave), str):
+                raise SystemExit(f"{nombre}:{n}: la clave {clave} del bloque {{{{#SI}}}} no existe en valores.json o no es texto")
+            abierto, dentro = n, valores[clave] in opciones
+        elif BLOQUE_FIN.match(linea):
+            if not abierto:
+                raise SystemExit(f"{nombre}:{n}: {{{{#FIN}}}} sin su {{{{#SI ...}}}}")
+            abierto, dentro = 0, True
+        elif "{{#" in linea:
+            raise SystemExit(f"{nombre}:{n}: marcador de bloque mal escrito o fuera de su propia línea: {linea.strip()!r}")
+        elif dentro:
+            salida.append(linea)
+    if abierto:
+        raise SystemExit(f"{nombre}:{abierto}: bloque {{{{#SI}}}} sin cerrar con {{{{#FIN}}}}")
+    return "\n".join(salida)
+
+
+def validar_claves(valores):
+    """Pone los valores por defecto de las claves nuevas (con aviso) y comprueba las que tienen opciones fijas."""
+    for clave, defecto in DEFECTOS.items():
+        if clave not in valores:
+            print(f"AVISO: valores.json no tiene {clave}; se usa {defecto!r} (cuestionario.md)", file=sys.stderr)
+            valores[clave] = defecto
+    if valores["NIVEL_AUTONOMIA"] not in NIVELES:
+        raise SystemExit(f"NIVEL_AUTONOMIA debe ser uno de {NIVELES} (es {valores['NIVEL_AUTONOMIA']!r})")
+    rechazos = valores["MAX_RECHAZOS"]
+    if isinstance(rechazos, bool) or not re.fullmatch(r"[1-9][0-9]*", str(rechazos)):
+        raise SystemExit(f"MAX_RECHAZOS debe ser un entero mayor o igual que 1 (es {rechazos!r})")
+    valores["MAX_RECHAZOS"] = str(rechazos)
 
 
 def rellenar_texto(texto, valores, roles):
@@ -84,6 +136,7 @@ def main(argv=None):
     falta = [r for r in ROLES_OBLIGATORIOS if r not in roles]
     if falta or any(not re.fullmatch(r"[a-z][a-z0-9-]*", r) for r in roles):
         raise SystemExit(f"ROLES debe incluir {ROLES_OBLIGATORIOS} y usar minúsculas y guiones (faltan: {falta})")
+    validar_claves(valores)
     valores.setdefault("FECHA_DESPLIEGUE", ahora_en(valores.get("ZONA_HORARIA", "UTC")))
 
     destino = os.path.abspath(args.destino)
@@ -96,7 +149,7 @@ def main(argv=None):
             origen = os.path.join(raiz, nombre)
             rel = os.path.relpath(origen, args.plantilla)
             with open(origen, encoding="utf-8") as f:
-                texto = f.read()
+                texto = aplicar_bloques(f.read(), valores, rel)
             if os.path.dirname(rel) == dir_roles:
                 if nombre in ("plantilla_ficha.md", "memoria_ROL.md"):
                     fichas[nombre] = (origen, texto)
@@ -128,7 +181,8 @@ def main(argv=None):
         for nombre in sorted(os.listdir(dir_extra)):
             origen = os.path.join(dir_extra, nombre)
             with open(origen, encoding="utf-8") as f:
-                copiar(origen, os.path.join(destino, "tools", "hooks", nombre), rellenar_texto(f.read(), valores, roles), informe)
+                texto = aplicar_bloques(f.read(), valores, os.path.join("extras", extra, nombre))
+            copiar(origen, os.path.join(destino, "tools", "hooks", nombre), rellenar_texto(texto, valores, roles), informe)
 
     pendientes = []
     for ruta in informe["creados"]:

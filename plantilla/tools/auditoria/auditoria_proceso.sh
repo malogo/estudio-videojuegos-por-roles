@@ -16,8 +16,12 @@
 # 3. Candados tools/locks/*.lock: huérfanos (modo pid: ni el envoltorio ni el comando siguen vivos), probables
 #    huérfanos (PID vivo sin poder saber si es el dueño), ocupados más de CANDADO_MAX_HORAS (6) y restos de un
 #    reclamo interrumpido. En modo flock un archivo con datos viejos no es hallazgo: solo cuenta si está cogido.
-# 4. Lotes del plan nocturno cuyo estado no coincide con el tablón.
+# 4. Lotes del plan nocturno cuyo estado no coincide con el tablón (un lote `pendiente` puede no aparecer aún), y
+#    (salvo en nivel bajo) lotes con el tope de rechazos de auditor-calidad (filas "Rechazo <lote>: ..."; tope en §4
+#    de la especificación, 3 si no se lee) que no están `bloqueado` ni terminados.
 # 5. Entradas de pendientes_manana.md abiertas hace más de 3 días.
+# 6. Rondas con algún lote `en curso` que no pasan tools/auditoria/preparacion_ronda.sh, y nivel de autonomía de la
+#    especificación distinto del de la cabecera de §9 de las normas.
 # Sale con 0 si no hay hallazgos, 1 si los hay y 2 si no puede auditar.
 
 set -uo pipefail
@@ -61,6 +65,8 @@ EXCEPCIONES="${EXCEPCIONES:-$RAIZ/tools/auditoria/excepciones_proceso.txt}"
 TABLON="$RAIZ/docs/direccion/tablon.md"
 PLAN="$RAIZ/docs/direccion/plan_nocturno.md"
 PENDIENTES="$RAIZ/docs/direccion/pendientes_manana.md"
+ESPEC="$RAIZ/docs/direccion/especificaciones.md"
+NORMAS="$RAIZ/docs/direccion/normas_comunes.md"
 FICHAS="$RAIZ/docs/direccion/roles"
 ROLES=("${ROLES_VALIDOS[@]}")
 DESTINOS_EXTRA=("persona responsable" "persona-responsable")
@@ -71,7 +77,7 @@ done
 
 declare -A HALLAZGOS=()
 TOTAL=0
-anotar() { # anotar <sección 1-5> <texto>
+anotar() { # anotar <sección 1-6> <texto>
     HALLAZGOS[$1]+="- $2"$'\n'
     TOTAL=$((TOTAL + 1))
 }
@@ -186,6 +192,14 @@ done
 
 # --- 4. Plan nocturno frente al tablón ---------------------------------------------------
 TABLON_TXT="$(leer "$TABLON" | grep -E '^[0-9]{4}-' || true)"
+# Nivel de autonomía y tope de rechazos, de la especificación (también para la sección 6)
+NIVEL_ESPEC="" MAX_RECHAZOS=3
+if [[ -f "$ESPEC" ]]; then
+    NIVEL_ESPEC="$(leer "$ESPEC" | sed -nE 's/^\*\*Nivel de autonomía:\*\*[[:space:]]*`([^`]*)`.*/\1/p' | head -n1)"
+    T="$(leer "$ESPEC" | sed -nE 's/.*antes de `bloqueado`:[[:space:]]*([0-9]+).*/\1/p' | head -n1)"
+    [[ "$T" =~ ^[1-9][0-9]*$ ]] && MAX_RECHAZOS="$T"
+fi
+declare -A RONDAS_EN_CURSO=()
 while IFS= read -r LINEA; do
     IFS='|' read -r _ _ ROL LOTE _ _ ESTADO _ <<< "$LINEA"
     ROL="$(recortar "$ROL")"; ESTADO="$(recortar "${ESTADO,,}")"
@@ -201,6 +215,9 @@ while IFS= read -r LINEA; do
         }
     }' <<< "$TABLON_TXT" || true)"
     MENCIONES="$(grep -Ew "$ID" <<< "$TABLON_TXT" || true)"
+    # Rechazos = filas de auditor-calidad cuyo "qué" empieza por "Rechazo <lote>" (normas §8)
+    RECHAZOS="$(awk -F' [|] ' -v id="Rechazo $ID" '$2=="auditor-calidad" && index($3, id) == 1 {
+        c = substr($3, length(id) + 1, 1); if (c !~ /[A-Za-z0-9]/) n++ } END { print n + 0 }' <<< "$TABLON_TXT")"
     case "$ESTADO" in
         hecho|entregado|terminado|completado|cerrado|validado)
             [[ -n "$ENTREGAS" ]] || anotar 4 "lote $ID ($ROL) marcado \`$ESTADO\` pero no hay fila de entrega de \`$ROL\` en el tablón" ;;
@@ -209,7 +226,15 @@ while IFS= read -r LINEA; do
         "en curso"|en_curso|bloqueado|rechazado) ;;
         *) anotar 4 "lote $ID ($ROL) con estado desconocido \`$ESTADO\`" ;;
     esac
-    [[ -n "$MENCIONES" ]] || anotar 4 "lote $ID ($ROL) está en el plan pero no aparece en el tablón"
+    case "$ESTADO" in
+        bloqueado|hecho|entregado|terminado|completado|cerrado|validado) ;;
+        *) [[ "$NIVEL_ESPEC" != bajo ]] && (( RECHAZOS >= MAX_RECHAZOS )) \
+            && anotar 4 "lote $ID ($ROL) lleva $RECHAZOS rechazos de auditor-calidad (tope $MAX_RECHAZOS) y está \`$ESTADO\`: coordinador debe pasarlo a \`bloqueado\`" ;;
+    esac
+    [[ ( "$ESTADO" == "en curso" || "$ESTADO" == en_curso ) && "$LOTE" =~ \(ronda[[:space:]]+([0-9]+) ]] \
+        && RONDAS_EN_CURSO[${BASH_REMATCH[1]}]=1
+    # Un lote pendiente aún no lanzado no tiene por qué estar en el tablón (nivel alto: todas las rondas planificadas)
+    [[ -n "$MENCIONES" || "$ESTADO" == pendiente ]] || anotar 4 "lote $ID ($ROL) está en el plan pero no aparece en el tablón"
 done < <(leer "$PLAN" | grep -E '^\|[[:space:]]*[0-9]+[[:space:]]*\|')
 
 # --- 5. Pendientes abiertos hace más de 3 días ------------------------------------------
@@ -232,13 +257,33 @@ while IFS= read -r LINEA; do
 done < <(leer "$PENDIENTES")
 cerrar_entrada
 
+# --- 6. Rondas en curso y nivel de autonomía -------------------------------------------
+# La puerta se pasa antes de lanzar una ronda; aquí se repite para las que ya están en curso. En el despliegue no hay
+# ninguna: el plan de la ronda 1 aún está por escribir y eso no es un hallazgo.
+for M in $(printf '%s\n' "${!RONDAS_EN_CURSO[@]}" | sort -n); do
+    SALIDA="$(bash "$RAIZ/tools/auditoria/preparacion_ronda.sh" "$M" --raiz "$RAIZ" 2>&1)"
+    case $? in
+        0) ;;
+        1) anotar 6 "la ronda $M tiene lotes \`en curso\` sin estar preparada (\`preparacion_ronda.sh $M\`): $(grep -m1 '^- ' <<< "$SALIDA" | cut -c3-160)" ;;
+        *) anotar 6 "la ronda $M tiene lotes \`en curso\` y \`preparacion_ronda.sh $M\` no puede comprobarla: $(head -n1 <<< "$SALIDA" | cut -c1-160)" ;;
+    esac
+done
+NIVEL_NORMAS=""
+[[ -f "$NORMAS" ]] && NIVEL_NORMAS="$(leer "$NORMAS" | sed -nE 's/^## 9\. Nivel de autonomía \(`([^`]*)`\).*/\1/p' | head -n1)"
+if [[ ! "$NIVEL_ESPEC" =~ ^(bajo|medio|alto)$ ]]; then
+    anotar 6 "nivel de autonomía ilegible en \`docs/direccion/especificaciones.md\` (falta la línea «**Nivel de autonomía:** \`bajo|medio|alto\`»; actualizar.md)"
+elif [[ "$NIVEL_ESPEC" != "$NIVEL_NORMAS" ]]; then
+    anotar 6 "el nivel de la especificación (\`$NIVEL_ESPEC\`) no coincide con el de la cabecera de §9 de las normas (\`${NIVEL_NORMAS:-ninguno}\`): coordinador los iguala (actualizar.md)"
+fi
+
 # --- Informe -----------------------------------------------------------------------------
 TITULOS=(""
     "1. Formato y tamaño del tablón"
     "2. Commits fuera de dueño (últimas 24 h)"
     "3. Candados huérfanos u ocupados demasiado tiempo"
     "4. Plan nocturno frente al tablón"
-    "5. Pendientes abiertos más de 3 días")
+    "5. Pendientes abiertos más de 3 días"
+    "6. Rondas en curso y nivel de autonomía")
 mkdir -p "$(dirname "$INFORME")"
 {
     echo "# Auditoría de proceso — $FECHA"
@@ -248,10 +293,10 @@ mkdir -p "$(dirname "$INFORME")"
     echo
     echo "| Comprobación | Hallazgos |"
     echo "|---|---|"
-    for i in 1 2 3 4 5; do
+    for i in 1 2 3 4 5 6; do
         echo "| ${TITULOS[$i]} | $(grep -c '^- ' <<< "${HALLAZGOS[$i]:-}") |"
     done
-    for i in 1 2 3 4 5; do
+    for i in 1 2 3 4 5 6; do
         echo
         echo "## ${TITULOS[$i]}"
         if [[ -n "${HALLAZGOS[$i]:-}" ]]; then printf '%s' "${HALLAZGOS[$i]}"; else echo "Sin hallazgos."; fi
@@ -259,7 +304,7 @@ mkdir -p "$(dirname "$INFORME")"
 } > "$INFORME"
 
 echo "Auditoría de proceso: $TOTAL hallazgo(s). Informe: $INFORME"
-for i in 1 2 3 4 5; do
+for i in 1 2 3 4 5 6; do
     echo "  ${TITULOS[$i]}: $(grep -c '^- ' <<< "${HALLAZGOS[$i]:-}")"
 done
 (( TOTAL == 0 ))

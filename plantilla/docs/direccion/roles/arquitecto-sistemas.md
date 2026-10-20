@@ -3,7 +3,7 @@
 ## Dueño Exclusivo de Archivos
 - `{{CONFIG_MOTOR}}`
 - `{{RUTA_NUCLEO}}`
-- `tools/hooks/**`, `tools/locks/**` y `tools/motor_silencioso.sh` (candados, guardas de git, hooks)
+- `tools/hooks/**`, `tools/locks/**`, `tools/motor_silencioso.sh` y `tools/despachador.sh` (candados, guardas de git, hooks, despachador del nivel alto)
 - Configuración del repositorio y de agentes: `.gitignore`, `.gitattributes`, `.claude/settings.json` y `.claude/agents/**`
   (cambios de norma, solo si lo aprueba la persona responsable)
 - `docs/direccion/roles/memoria_arquitecto-sistemas.md`

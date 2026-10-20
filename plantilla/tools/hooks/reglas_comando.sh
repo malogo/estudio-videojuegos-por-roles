@@ -4,6 +4,9 @@
 #      motivo=$(motivo_bloqueo_linea "<orden completa>") || echo "BLOQUEADO: $motivo"
 #      motivo=$(motivo_bloqueo_git <args de git...>)       || echo "BLOQUEADO: $motivo"
 # Devuelven 1 e imprimen el motivo si la orden está prohibida; 0 si está permitida.
+# Con DESPACHADOR=1 en el entorno (sesiones que lanza tools/despachador.sh) se prohíbe además publicar, fusionar o
+# cambiar de rama (git push, pull, merge, rebase, switch, checkout -b, branch salvo para listar) y lanzar otro
+# despachador: la sesión trabaja en la rama autonomo/... que creó él y la fusión la decide la persona responsable.
 
 # shellcheck source=requisitos.sh
 source "$(dirname "${BASH_SOURCE[0]}")/requisitos.sh"
@@ -74,6 +77,34 @@ _ruta_amplia() {
     [[ "$p" == . || "$p" == */ || "$p" == :* || "$p" == *[\*\?\[]* || -d "$p" ]]
 }
 
+# Con DESPACHADOR=1: imprime el motivo y devuelve 1 si la suborden <sub> [args...] publica, fusiona o cambia de rama.
+_git_despachador() {
+    local sub="$1" x lista=0 cambia=""
+    shift
+    case "$sub" in
+        push|pull|merge|rebase|switch) cambia="git $sub" ;;
+        checkout)
+            for x in "$@"; do
+                [[ "$x" == -- ]] && break
+                if [[ "$x" =~ ^-[a-zA-Z]*[bB] ]] || _opcion "$x" --orphan; then cambia="git checkout $x"; break; fi
+            done ;;
+        branch)
+            # Listar sí (git branch, -a, -v, --show-current, --list <patrón>); crear, borrar, renombrar o mover, no
+            for x in "$@"; do [[ "$x" == -l || "$x" == --list ]] && lista=1; done
+            for x in "$@"; do
+                case "$x" in
+                    -d|-D|--delete|-m|-M|--move|-c|-C|--copy|-f|--force|-u|--set-upstream-to*|--unset-upstream|--edit-description|-t|--track*|--no-track)
+                        cambia="git branch $x"; break ;;
+                    -*) ;;
+                    *) (( lista )) || { cambia="git branch $x"; break; } ;;
+                esac
+            done ;;
+    esac
+    [[ -z "$cambia" ]] && return 0
+    echo "Prohibido '$cambia' en una sesión del despachador (DESPACHADOR=1): se trabaja en la rama autonomo/... que creó él; publicar, fusionar y cambiar de rama lo decide la persona responsable."
+    return 1
+}
+
 # Recibe los argumentos que van detrás de "git".
 motivo_bloqueo_git() {
     local -a t=("$@")
@@ -103,6 +134,9 @@ motivo_bloqueo_git() {
     local -a a=("${t[@]:i+1}") pos=()
     local x f j c m
 
+    if [[ "${DESPACHADOR:-}" == 1 ]] && ! _git_despachador "$sub" "${a[@]}"; then
+        return 1
+    fi
     case "$sub" in
         stash)
             echo "Prohibido 'git stash' en árbol compartido. Usa commits por rutas."
@@ -320,11 +354,13 @@ segmentos_orden() { printf '%s' "$1" | LC_ALL=C awk "$_AWK_SEGMENTOS"; }
 
 _es_shell() { [[ "$1" =~ ^(ba|z|da|k)?sh(\.exe)?$ ]]; }
 
-# Archivos que no se escriben desde la terminal: imprime "tablon" (docs/direccion/tablon.md) o "gitconfig"
-# (.git/config o config.worktree, que pueden cambiar core.hooksPath).
+# Archivos que no se escriben desde la terminal: imprime "tablon" (docs/direccion/tablon.md), "gitconfig"
+# (.git/config o config.worktree, que pueden cambiar core.hooksPath) o "parar" (.parar, el interruptor de parada del
+# despachador: solo lo crea o lo borra la persona responsable desde su terminal).
 _protegido() {
     local p="${1//\\//}"
     if [[ "${p##*/}" == tablon.md ]]; then echo tablon; return 0; fi
+    if [[ "${p%/}" == .parar || "${p%/}" == */.parar ]]; then echo parar; return 0; fi
     [[ "$p" =~ (^|/)\.git/(worktrees/[^/]+/)?config(\.worktree)?$ ]] && { echo gitconfig; return 0; }
     return 1
 }
@@ -401,8 +437,27 @@ motivo_bloqueo_linea() {
                 fi
             done
         fi
+        # Órdenes que crean, borran, mueven o copian archivos: .parar no se toca desde una sesión
+        if [[ "$base" =~ ^(rm|unlink|mv|cp|touch|truncate|ln|install)(\.exe)?$ ]]; then
+            for x in "${tok[@]:k+1}"; do
+                if [[ "$(_protegido "$x")" == parar ]]; then
+                    echo "Prohibido tocar .parar desde una sesión ($base): es el interruptor de parada del despachador y solo lo crea o lo borra la persona responsable."
+                    return 1
+                fi
+            done
+        fi
+        if [[ "${DESPACHADOR:-}" == 1 ]]; then
+            x="$base"
+            _es_shell "$base" && x="$(_basename_cmd "${tok[k+1]:-}")"
+            if [[ "$x" == despachador.sh ]]; then
+                echo "Prohibido lanzar el despachador desde una de sus sesiones (DESPACHADOR=1): lo lanza la persona responsable desde su terminal."
+                return 1
+            fi
+        fi
         if protegido="$(_escribe_protegido "${tok[@]:k}" || _escribe_protegido "${tok[@]:0:k}")"; then
-            if [[ "$protegido" == gitconfig ]]; then
+            if [[ "$protegido" == parar ]]; then
+                echo "Prohibido escribir en .parar desde la terminal: es el interruptor de parada del despachador y solo lo crea o lo borra la persona responsable."
+            elif [[ "$protegido" == gitconfig ]]; then
                 echo "Prohibido escribir en la configuración de git desde la terminal: podría cambiar core.hooksPath y saltarse los hooks del proyecto."
             else
                 echo "Prohibido escribir en el tablón desde la terminal. Usa ./tools/hooks/entregar.sh <rol> \"<qué>\" \"<ruta o commit>\" <destino> [-- <rutas>] (pone la hora real y commitea tu fila con tus rutas)."

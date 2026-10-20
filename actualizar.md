@@ -19,10 +19,10 @@ con `./tools/hooks/entregar.sh <dueño> "Actualiza la plantilla: <qué>" "<rutas
 
 | Dueño | Qué | Cómo |
 |---|---|---|
-| `arquitecto-sistemas` | `tools/hooks/*` (scripts, `pre-commit`, `commit-msg`, `tests/`), `tools/locks/with_lock.sh`, `tools/motor_silencioso.sh` | Copiar tal cual (`cp`), salvo que el proyecto los haya cambiado: entonces fusionar. |
+| `arquitecto-sistemas` | `tools/hooks/*` (scripts, `pre-commit`, `commit-msg`, `tests/`), `tools/locks/with_lock.sh`, `tools/motor_silencioso.sh`, `tools/despachador.sh` | Copiar tal cual (`cp`), salvo que el proyecto los haya cambiado: entonces fusionar. |
 | `arquitecto-sistemas` | `tools/hooks/propiedad.tsv`, `.gitignore`, `.gitattributes`, `.claude/` | Fusionar a mano: llevan rutas propias del proyecto (si no había `.gitattributes`, cópialo). |
-| `auditor-calidad` | `tools/auditoria/auditoria_proceso.sh` | Copiar. `ruido_motor.txt` y `excepciones_proceso.txt` se conservan (crea `ruido_motor.txt` si no existe). |
-| `coordinador` | `CLAUDE.md`, `docs/direccion/normas_comunes.md`, fichas, `plantilla_encargo.md` | Fusionar a mano, con aprobación de la persona responsable (normas §2). El tablón no se toca: su cabecera vieja sigue valiendo. |
+| `auditor-calidad` | `tools/auditoria/auditoria_proceso.sh`, `tools/auditoria/preparacion_ronda.sh` | Copiar. `ruido_motor.txt` y `excepciones_proceso.txt` se conservan (crea `ruido_motor.txt` si no existe). |
+| `coordinador` | `CLAUDE.md`, `docs/direccion/normas_comunes.md`, `especificaciones.md`, cabecera de `plan_nocturno.md`, fichas, `plantilla_encargo.md` | Fusionar a mano, con aprobación de la persona responsable (normas §2). El tablón no se toca: su cabecera vieja sigue valiendo. |
 
 Copia primero lo de `arquitecto-sistemas`: los hooks nuevos son los que validan las entregas siguientes.
 
@@ -31,7 +31,41 @@ Copia primero lo de `arquitecto-sistemas`: los hooks nuevos son los que validan 
 - `grep -rn "{{" CLAUDE.md docs tools .claude` solo enseña `{{COMPLETAR}}` ya conocidos (o nada).
 - Una ejecución real del motor: `./tools/motor_silencioso.sh arquitecto-sistemas <argumentos de siempre>`.
 
-## 4. Avisos de esta versión (historia compartida, portabilidad y contexto)
+## 4. Avisos de esta versión (niveles de autonomía y despachador)
+- **Claves nuevas** `NIVEL_AUTONOMIA` (`bajo`, `medio` o `alto`) y `MAX_RECHAZOS` (`cuestionario.md`, A0 y E7). Si
+  `valores.json` no las tiene, `rellenar_plantilla.py` usa `medio` y `3` y lo avisa: añádelas con lo que decida la persona.
+- **Bloques condicionales**: la plantilla lleva `{{#SI NIVEL_AUTONOMIA=…}}` … `{{#FIN}}` y el rellenado deja solo el texto
+  del nivel elegido; en `/tmp/plantilla_nueva` ya no aparecen.
+- **Marcador único** `(POR ESCRIBIR: …)` para lo que falta por decidir. En la especificación del proyecto, cambia los
+  «(Por escribir…)», «(Módulos, datos…)» y «(Contratos vigentes…)» viejos por apartados con ese marcador (o escríbelos
+  ya) y sigue la estructura nueva: línea del nivel bajo el título, §2 con un apartado `### <Sistema> (ronda N)` por
+  sistema, §3 con un apartado `### Contrato: <sistema> (ronda N)` por contrato, §4 «Criterios de Desempate y Topes» y
+  §5 la estructura de carpetas.
+- **Puerta de ronda** `tools/auditoria/preparacion_ronda.sh <N>`: se pasa antes de lanzar cada ronda (normas §9). La
+  auditoría tiene una sección 6: rondas `en curso` que no pasan la puerta, y nivel de la especificación distinto del de
+  la cabecera de normas §9 (fusiona los dos a la vez).
+- **Fila de rechazo** del auditor, siempre `./tools/hooks/entregar.sh auditor-calidad "Rechazo <lote>: <motivo>" ...`
+  (normas §8): fuera del nivel `bajo`, la auditoría marca los lotes con `MAX_RECHAZOS` rechazos o más que no estén `bloqueado`.
+- **Despachador del nivel alto** `tools/despachador.sh` (y `tools/hooks/tests/claude_falso.sh` para sus pruebas): se
+  copia. En `propiedad.tsv`, la línea `tools/despachador.sh	arquitecto-sistemas` (y en la ficha de arquitecto-sistemas);
+  en `.gitignore`, `.parar` y `.despachador_logs/` (sin ellas no arranca). En nivel `alto`, fusiona normas §9 y las
+  fichas de `coordinador` y `auditor-calidad`: las rondas ya no las encadena la ventana del coordinador, sino el
+  despachador, que lanza la persona responsable desde su terminal (`readme.txt`, 6.6).
+- **Reglas nuevas de órdenes**: `.parar` no se crea, borra ni mueve desde la terminal de una sesión; en las sesiones
+  del despachador (`DESPACHADOR=1`) se bloquean `git push`, `pull`, `merge`, `rebase`, `switch`, `checkout -b` y crear o
+  borrar ramas.
+- **Cuota en USD**: en nivel `alto` la puerta exige `**Cuota:** <n> USD por ronda` en la cabecera del plan (entero o
+  decimal); es el tope de gasto del despachador.
+- **Contratos**: un lote con `contrato: <sistema>` en la columna Lote no pasa la puerta hasta que §3 de la
+  especificación tiene su apartado `### Contrato: <sistema>` sin «POR ESCRIBIR».
+- **Auditoría §4**: un lote `pendiente` que aún no aparece en el tablón ya no es hallazgo (en `alto` se planifican todas
+  las rondas desde el principio).
+- **Cambiar de nivel** en un proyecto ya desplegado (lo decide la persona responsable; lo hace `coordinador`): rellena a
+  `/tmp` con el nivel nuevo en `valores.json` y fusiona normas §8 y §9, las fichas de `coordinador` y `auditor-calidad`,
+  la línea 2 (**Ventana**) del plan, la línea del nivel de la especificación y la de `CLAUDE.md`. Después,
+  `./tools/auditoria/auditoria_proceso.sh` sin hallazgos en la sección 6 y `preparacion_ronda.sh <N>` de la próxima ronda.
+
+## 5. Avisos de la versión anterior (historia compartida, portabilidad y contexto)
 - **Más órdenes bloqueadas**: `git commit --amend`, `git reset <commit>` y `--soft` (mueven la rama), `git checkout|restore`
   de carpetas o comodines, `git checkout|switch -f`, `export GIT_CONFIG_*`, `git config include.path` y escribir en
   `.git/config` (también con Edit). Las abreviaturas que git acepta (`--amen`, `--no-veri`, `reset --har`) cuentan igual:
@@ -48,7 +82,7 @@ Copia primero lo de `arquitecto-sistemas`: los hooks nuevos son los que validan 
   en CRLF y bash no los entiende. Si en algún equipo ya están en CRLF: con el árbol limpio y las sesiones paradas, la
   persona responsable los vuelve a sacar desde su terminal (`rm -rf tools && git checkout HEAD -- tools`).
 
-## 5. Avisos de la versión anterior (endurecimiento de candados, motor y tablón)
+## 6. Avisos de versiones anteriores (endurecimiento de candados, motor y tablón)
 - **Código 65 del motor**: `motor_silencioso.sh` sale con 65 si el motor dio 0 pero el log tiene errores. Órdenes
   encadenadas (`... && ...`) que antes pasaban «en falso» ahora paran: es lo buscado. Si el error es ruido benigno,
   lo silencia `auditor-calidad` en `tools/auditoria/ruido_motor.txt`. La salida del motor ya no entra en el contexto:

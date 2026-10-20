@@ -1,4 +1,5 @@
 {
+  "NIVEL_AUTONOMIA": "medio",
   "NOMBRE_PROYECTO": "Juego de Ejemplo",
   "DESCRIPCION_PRODUCTO": "Juego de plataformas 2D para un jugador, sin compras dentro del juego.",
   "MOTOR": "Godot 4.7",
@@ -26,5 +27,6 @@
   "MODELO_EJECUTOR": "sonnet",
   "MODELO_LECTOR": "haiku",
   "CUOTA": "a decidir por la persona responsable",
-  "MAX_SESIONES": "2"
+  "MAX_SESIONES": "2",
+  "MAX_RECHAZOS": "3"
 }

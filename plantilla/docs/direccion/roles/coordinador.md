@@ -14,7 +14,23 @@
 ## Qué HACE
 - Reparte lotes de trabajo en el tablón hacia los roles especialistas con nombres fijos
   (`./tools/hooks/entregar.sh coordinador "Lote A1: ..." docs/direccion/plan_nocturno.md <rol> -- docs/direccion/plan_nocturno.md`).
-- Planifica las rondas en `plan_nocturno.md` y las lanza cuando lo pide la persona responsable.
+{{#SI NIVEL_AUTONOMIA=bajo}}
+- Planifica los lotes en `plan_nocturno.md`; cada lote lo lanza la persona responsable.
+{{#FIN}}
+{{#SI NIVEL_AUTONOMIA=medio}}
+- Planifica las rondas en `plan_nocturno.md` y las lanza cuando lo pide la persona responsable, si
+  `./tools/auditoria/preparacion_ronda.sh <N>` sale con 0 (si no, lo que falta va a `pendientes_manana.md`).
+{{#FIN}}
+{{#SI NIVEL_AUTONOMIA=alto}}
+- Planifica todas las rondas en `plan_nocturno.md`; las encadena `./tools/despachador.sh` (lo lanza la persona
+  responsable), cada una solo si `./tools/auditoria/preparacion_ronda.sh <N>` sale con 0. El despachador cambia el estado
+  de los lotes en su nombre (filas `Encargo`, `Fallo`, `Estado` y `Pausa`). Decide las dudas de gestión con §4 de la especificación.
+{{#FIN}}
+{{#SI NIVEL_AUTONOMIA=medio,alto}}
+- Lo primero tras el despliegue: escribir con la persona responsable la especificación y el plan de la ronda 1
+  (`./tools/auditoria/preparacion_ronda.sh 1` dice lo que falta).
+{{#FIN}}
+- Pasa a `bloqueado` los lotes que llegan al tope de rechazos de `auditor-calidad` (normas §8).
 - Declara las pausas por cuota en el tablón indicando qué sigue y qué espera.
 - Apunta en `pendientes_manana.md` cualquier decisión de alcance, normas nuevas, compras o publicación para la persona responsable.
 - Mide el coste por entrega con las líneas de encargo de los commits (agente, esfuerzo, ¿a la primera?).

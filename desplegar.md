@@ -15,6 +15,8 @@ rol: es «la sesión de despliegue». No toques nada del proyecto antes del paso
 
 ## 3. Hacer el cuestionario
 - Un bloque cada vez (A, B, C, D, E, F), con el valor por defecto a la vista. Si la persona no sabe: defecto.
+- Empieza por A0 (nivel de autonomía): de él depende cuánto hay que dejar escrito antes de lanzar rondas.
+  A2 sigue siendo 1-2 frases en todos los niveles; el detalle va luego a la especificación.
 - Si el motor ya está en la carpeta, deduce lo que puedas (versión, carpetas) y pide solo confirmación.
 - Escribe las respuestas en `valores.json` **fuera del proyecto** (p. ej. junto a la plantilla), con el formato de
   `<PLANTILLA>/ejemplo_valores_unity_pc.json` (o `ejemplo_valores_godot_pc.json`). Enséñaselo a la persona antes de seguir.
@@ -86,4 +88,9 @@ git status --short                           # limpio salvo el informe de audito
 - Explica a la persona, en pocas líneas: qué se creó, el resultado de la comprobación y qué hacer ahora.
 - **Hay que cerrar esta sesión y abrir otra**: Claude Code carga `CLAUDE.md` y los hooks de `.claude/settings.json`
   al arrancar. La primera sesión nueva es la del coordinador (`readme.txt`, sección 6).
+- En nivel `medio` o `alto`, di a la persona que la primera tarea del coordinador es escribir con ella la
+  especificación (`docs/direccion/especificaciones.md`) y el plan de la ronda 1, y que
+  `./tools/auditoria/preparacion_ronda.sh 1` dice lo que falta antes de poder lanzarla.
+- En nivel `alto`, además, que la cuota va como `<n> USD por ronda` y que las rondas las lanza ella desde su terminal
+  con `./tools/despachador.sh` (`--simular` dice qué haría; `readme.txt`, 6.6).
 - Si hay remoto (GitHub…), sube la rama solo si la persona lo pide.

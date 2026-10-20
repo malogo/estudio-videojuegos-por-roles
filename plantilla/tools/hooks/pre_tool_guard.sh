@@ -7,6 +7,8 @@
 # guard_propiedad.sh para Edit|Write).
 # Con el rol ya declarado, bloquea actuar en nombre de otro rol por despiste: git commit -m "<otro rol>: ...",
 # entregar.sh, archivar_tablon.sh o motor_silencioso.sh con un rol que no es el de la sesión.
+# Con DESPACHADOR=1 (sesiones que lanza tools/despachador.sh) bloquea también publicar, fusionar o cambiar de rama y
+# lanzar otro despachador (reglas de reglas_comando.sh).
 
 set -uo pipefail
 

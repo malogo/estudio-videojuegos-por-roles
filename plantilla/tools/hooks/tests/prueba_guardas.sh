@@ -46,7 +46,8 @@ git config core.hooksPath tools/hooks
 json_edit() { printf '{"session_id":"S1","tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$1"; }
 json_bash() { printf '{"session_id":"S1","tool_name":"Bash","tool_input":{"command":"%s"}}' "$1"; }
 edit()  { json_edit "$1" | env -u CLAUDE_ROL bash tools/hooks/guard_propiedad.sh; }
-orden() { json_bash "$1" | env -u CLAUDE_ROL bash tools/hooks/pre_tool_guard.sh; }
+orden() { json_bash "$1" | env -u CLAUDE_ROL -u DESPACHADOR bash tools/hooks/pre_tool_guard.sh; }
+orden_despachador() { json_bash "$1" | env -u CLAUDE_ROL DESPACHADOR=1 bash tools/hooks/pre_tool_guard.sh; }  # sesión del despachador
 
 echo "== Órdenes (hook PreToolUse)"
 espera_rechazo "git add -A bloqueado" "Prohibido" orden "git add -A"
@@ -84,6 +85,32 @@ if [[ -n "$BIN_MOTOR" ]] && bash -c 'source tools/hooks/reglas_comando.sh; _es_m
     espera_rechazo "open -a del motor (macOS) bloqueado" "motor" orden "open -a /Applications/$BIN_MOTOR.app --args --path ."
 fi
 espera_ok "flatpak run de otro programa permitido" orden "flatpak run org.gimp.GIMP"
+# .parar (interruptor de parada del despachador): solo lo crea o lo borra la persona responsable
+espera_rechazo "rm .parar bloqueado" ".parar" orden "rm -f ./.parar"
+espera_rechazo "touch .parar bloqueado" ".parar" orden "touch .parar"
+espera_rechazo "mv .parar bloqueado" ".parar" orden "mv .parar /tmp/x"
+espera_rechazo "echo > .parar bloqueado" ".parar" orden "echo x > .parar"
+espera_rechazo "tee .parar bloqueado" ".parar" orden "echo x | tee .parar"
+espera_ok "leer .parar permitido" orden "cat .parar"
+# Sesiones del despachador (DESPACHADOR=1): sin publicar, fusionar ni cambiar de rama, ni otro despachador
+espera_ok "git push sin DESPACHADOR no lo bloquea esta regla" orden "git push origin x"
+espera_rechazo "git push con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git push origin x"
+espera_rechazo "git -C . push tras cd con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "cd docs && git -C .. push"
+espera_rechazo "git pull con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git pull"
+espera_rechazo "git merge con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git merge main"
+espera_rechazo "git rebase con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git rebase main"
+espera_rechazo "git switch con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git switch main"
+espera_rechazo "git checkout -qb con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git checkout -qb nueva"
+espera_rechazo "git checkout --orphan con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git checkout --orphan nueva"
+espera_ok "git checkout HEAD -- <archivo> con DESPACHADOR=1 permitido" orden_despachador "git checkout HEAD -- docs/direccion/plan_nocturno.md"
+espera_rechazo "git branch <nueva> con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git branch nueva"
+espera_rechazo "git branch -D con DESPACHADOR=1 bloqueado" "DESPACHADOR=1" orden_despachador "git branch -D x"
+espera_ok "git branch --show-current con DESPACHADOR=1 permitido" orden_despachador "git branch --show-current"
+espera_ok "git branch -a -v con DESPACHADOR=1 permitido" orden_despachador "git branch -a -v"
+espera_ok "git branch --list <patrón> con DESPACHADOR=1 permitido" orden_despachador "git branch --list autonomo/*"
+espera_rechazo "lanzar el despachador con DESPACHADOR=1 bloqueado" "despachador" orden_despachador "./tools/despachador.sh --simular"
+espera_rechazo "bash tools/despachador.sh con DESPACHADOR=1 bloqueado" "despachador" orden_despachador "bash tools/despachador.sh"
+espera_ok "leer el despachador con DESPACHADOR=1 permitido" orden_despachador "grep ronda tools/despachador.sh"
 
 echo "== Propiedad al editar (hook PreToolUse de Edit|Write)"
 espera_rechazo "Edit sin rol declarado bloqueado" "Declara antes tu rol" edit "$R/docs/direccion/plan_nocturno.md"

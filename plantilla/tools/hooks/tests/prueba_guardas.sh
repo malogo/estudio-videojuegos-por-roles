@@ -440,9 +440,10 @@ echo "== Preparación de rondas (preparacion_ronda.sh) y su parte de la auditor�
 mkdir -p "$TMP/ronda/docs/direccion" && cd "$TMP/ronda" || exit 1
 git init -q . && cp -r "$RAIZ_SRC/tools" . && rm -f tools/locks/*.lock
 PR=./tools/auditoria/preparacion_ronda.sh
-espec() {  # espec <nivel> <§2> <primera línea de §4>
-    printf '# Especificación\n**Nivel de autonomía:** `%s`\n\n## 1. Visión General\n- Juego de prueba.\n\n## 2. Mecánicas y Sistemas\n%s\n\n## 3. Arquitectura Técnica y Contratos entre Roles\n### Contrato: salto (ronda 1)\n- señal saltado(altura) · arquitecto-sistemas · coordinador\n\n## 4. Criterios de Desempate y Topes\n%s\n- Rechazos de `auditor-calidad` por lote antes de `bloqueado`: 3.\n\n## 5. Estructura de Carpetas por Dueño\n- propiedad.tsv\n' \
-        "$1" "$2" "$3" > docs/direccion/especificaciones.md
+CONTRATO_SALTO=$'### Contrato: salto (ronda 1)\n- señal saltado(altura) · arquitecto-sistemas · coordinador'
+espec() {  # espec <nivel> <§2> <primera línea de §4> [<§3>]
+    printf '# Especificación\n**Nivel de autonomía:** `%s`\n\n## 1. Visión General\n- Juego de prueba.\n\n## 2. Mecánicas y Sistemas\n%s\n\n## 3. Arquitectura Técnica y Contratos entre Roles\n%s\n\n## 4. Criterios de Desempate y Topes\n%s\n- Rechazos de `auditor-calidad` por lote antes de `bloqueado`: 3.\n\n## 5. Estructura de Carpetas por Dueño\n- propiedad.tsv\n' \
+        "$1" "$2" "${4:-$CONTRATO_SALTO}" "$3" > docs/direccion/especificaciones.md
 }
 plan() {  # plan <cuota> <filas...>
     { printf '# Plan\n**Ventana:** x | **Cuota:** %s\n\n| # | Rol | Lote | Criterio de hecho | Comando de comprobación | Estado |\n|---|---|---|---|---|---|\n' "$1"
@@ -467,16 +468,26 @@ espec medio "$SALTO_POR" "$DESEMPATE"
 espera_codigo "[medio] apartado (ronda 1) con «POR ESCRIBIR»: no lista" 1 "ronda 1 con «POR ESCRIBIR»" $PR 1
 espec medio "$SALTO"$'\n'"$MENU_POR" "$DESEMPATE"
 espera_codigo "[medio] un apartado (ronda 2) pendiente no impide la ronda 1" 0 "lista para lanzar" $PR 1
+espec medio "$SALTO" "$DESEMPATE"
+plan "a decidir" "$(lote A1 "ronda 1, contrato: Salto" ./tests/salto.sh)"
+espera_codigo "contrato: con otras mayúsculas y sin su (ronda M), firmado: lista" 0 "lista para lanzar" $PR 1
+plan "a decidir" "$(lote A1 "ronda 1, contrato: menú" ./tests/salto.sh)"
+espera_codigo "contrato: sin apartado en §3: no lista" 1 "no tiene apartado «### Contrato: menú»" $PR 1
+espec medio "$SALTO" "$DESEMPATE" $'### Contrato: salto (ronda 1)\n- (POR ESCRIBIR: señales)'
+plan "a decidir" "$(lote A1 "ronda 1, contrato: salto" ./tests/salto.sh)"
+espera_codigo "contrato: sin firmar: no lista" 1 "sin firmar" $PR 1
 espec alto "$SALTO" "- Prioridad: (POR ESCRIBIR: x)"
-plan "100 euros por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+plan "100 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
 espera_codigo "[alto] §4 con «POR ESCRIBIR»: no lista" 1 "(§4)" $PR 1
 espec alto "$SALTO" "$DESEMPATE"
-plan "100 euros por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras Z9" ./tests/menu.sh)"
+plan "100 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras Z9" ./tests/menu.sh)"
 espera_codigo "[alto] «tras Z9» que no existe: no lista" 1 "Z9" $PR 1
 plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
 espera_codigo "[alto] cuota «a decidir»: no lista" 1 "Cuota" $PR 1
 plan "100 euros por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
-espera_codigo "[alto] todo completo: lista" 0 "lista para lanzar" $PR 1
+espera_codigo "[alto] cuota sin «USD por ronda»: no lista" 1 "USD por ronda" $PR 1
+plan "12,5 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)" "$(lote B1 "ronda 2, tras A1" ./tests/menu.sh)"
+espera_codigo "[alto] todo completo (cuota con decimales): lista" 0 "lista para lanzar" $PR 1
 espec altisimo "$SALTO" "$DESEMPATE"
 espera_codigo "nivel ilegible -> 2" 2 "ilegible" $PR 1
 espera_codigo "sin número de ronda -> 64" 64 "Uso" $PR
@@ -500,8 +511,9 @@ espec medio "$SALTO" "$DESEMPATE"
 { rechazo uno; rechazo dos; rechazo tres; } >> docs/direccion/tablon.md
 espera_codigo "auditoría: 3 rechazos de un lote no bloqueado -> hallazgo en la sección 4" 1 "4. Plan nocturno frente al tablón: 1" auditar
 en_informe "... con el número de rechazos y el tope" "lleva 3 rechazos de auditor-calidad (tope 3)"
-plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh bloqueado)"
-espera_codigo "... y ninguno si el lote ya está bloqueado" 0 "4. Plan nocturno frente al tablón: 0" auditar
+plan "a decidir" "$(lote A1 "ronda 1" ./tests/salto.sh bloqueado)" "$(lote B1 "ronda 2" ./tests/menu.sh)"
+espera_codigo "... y ninguno si el lote ya está bloqueado (ni por B1, pendiente y aún fuera del tablón)" 0 \
+    "4. Plan nocturno frente al tablón: 0" auditar
 normas alto
 espera_codigo "auditoría: nivel distinto en la especificación y en normas §9 -> hallazgo" 1 "6. Rondas en curso y nivel de autonomía: 1" auditar
 en_informe "... que dice los dos niveles" "(\`medio\`) no coincide con el de la cabecera de §9 de las normas (\`alto\`)"

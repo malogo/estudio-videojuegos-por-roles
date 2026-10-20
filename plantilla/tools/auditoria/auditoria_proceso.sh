@@ -16,9 +16,9 @@
 # 3. Candados tools/locks/*.lock: huérfanos (modo pid: ni el envoltorio ni el comando siguen vivos), probables
 #    huérfanos (PID vivo sin poder saber si es el dueño), ocupados más de CANDADO_MAX_HORAS (6) y restos de un
 #    reclamo interrumpido. En modo flock un archivo con datos viejos no es hallazgo: solo cuenta si está cogido.
-# 4. Lotes del plan nocturno cuyo estado no coincide con el tablón, y (salvo en nivel bajo) lotes con el tope de
-#    rechazos de auditor-calidad (filas "Rechazo <lote>: ..."; tope en §4 de la especificación, 3 si no se lee) que
-#    no están `bloqueado` ni terminados.
+# 4. Lotes del plan nocturno cuyo estado no coincide con el tablón (un lote `pendiente` puede no aparecer aún), y
+#    (salvo en nivel bajo) lotes con el tope de rechazos de auditor-calidad (filas "Rechazo <lote>: ..."; tope en §4
+#    de la especificación, 3 si no se lee) que no están `bloqueado` ni terminados.
 # 5. Entradas de pendientes_manana.md abiertas hace más de 3 días.
 # 6. Rondas con algún lote `en curso` que no pasan tools/auditoria/preparacion_ronda.sh, y nivel de autonomía de la
 #    especificación distinto del de la cabecera de §9 de las normas.
@@ -233,7 +233,8 @@ while IFS= read -r LINEA; do
     esac
     [[ ( "$ESTADO" == "en curso" || "$ESTADO" == en_curso ) && "$LOTE" =~ \(ronda[[:space:]]+([0-9]+) ]] \
         && RONDAS_EN_CURSO[${BASH_REMATCH[1]}]=1
-    [[ -n "$MENCIONES" ]] || anotar 4 "lote $ID ($ROL) está en el plan pero no aparece en el tablón"
+    # Un lote pendiente aún no lanzado no tiene por qué estar en el tablón (nivel alto: todas las rondas planificadas)
+    [[ -n "$MENCIONES" || "$ESTADO" == pendiente ]] || anotar 4 "lote $ID ($ROL) está en el plan pero no aparece en el tablón"
 done < <(leer "$PLAN" | grep -E '^\|[[:space:]]*[0-9]+[[:space:]]*\|')
 
 # --- 5. Pendientes abiertos hace más de 3 días ------------------------------------------

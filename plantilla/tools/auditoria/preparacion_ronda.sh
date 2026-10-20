@@ -9,13 +9,14 @@
 # marca siempre "(POR ESCRIBIR: …)".
 # 1. Todos los niveles: plan_nocturno.md tiene algún lote "(ronda N)" en la columna Lote y al menos uno `pendiente` o
 #    `en curso`; cada uno con rol válido, criterio de hecho, comando de comprobación sin "...", "<…>" ni
-#    "(POR ESCRIBIR" y un estado conocido. En `bajo`, si no hay lotes de la ronda, lo dice y sale con 0 (se lanza
-#    lote a lote).
+#    "(POR ESCRIBIR" y un estado conocido; cada "contrato: <sistema>" de la columna Lote, con su apartado
+#    "### Contrato: <sistema>" en §3 de la especificación (sin distinguir mayúsculas ni contar el "(ronda M)" final) y
+#    sin "(POR ESCRIBIR" (firmado). En `bajo`, si no hay lotes de la ronda, lo dice y sale con 0 (se lanza lote a lote).
 # 2. `medio` y `alto`: §1 de la especificación sin "(POR ESCRIBIR"; en §2 y §3, cada apartado "### … (ronda M)" con
 #    M <= N sin "(POR ESCRIBIR", y al menos un apartado de §2 con M <= N.
 # 3. `alto`: §1-§4 enteras sin "(POR ESCRIBIR"; la comprobación 1 para los lotes de todas las rondas (cada uno con su
 #    "(ronda M)"); cada "tras X" de la columna Lote apunta a un lote que existe; la Cuota de la cabecera del plan
-#    definida (ni "a decidir" ni "(POR ESCRIBIR").
+#    con la forma "<n> USD por ronda" (entero o decimal; la usa tools/despachador.sh).
 # Columnas del plan: | # | Rol | Lote | Criterio de hecho | Comando de comprobación | Estado |. Un "|" dentro de una
 # celda va escapado ("\|"); mejor aún, el comando en un script de tests.
 # Sale con 0 si la ronda está lista, 1 si no (imprime lo que falta, como mucho 20 líneas), 2 si no se puede
@@ -66,6 +67,25 @@ falta() { FALTAS+=("$1"); }
 MARCA='(POR ESCRIBIR'
 HUECO='<[^<>]+>'   # "<ruta>", "<rol dueño>"... (en una variable: escrito en el [[ =~ ]], "\<" sería un ancla de palabra)
 
+# --- Especificación: contratos de §3 ---------------------------------------------------------
+# CONTRATO[<sistema en minúsculas>] = "firmado" o "sin firmar" (le queda "(POR ESCRIBIR")
+declare -A CONTRATO=()
+SEC=0 CLAVE=""
+while IFS= read -r LINEA; do
+    if [[ "$LINEA" =~ ^##[[:space:]]+([0-9]+)\. ]]; then SEC="${BASH_REMATCH[1]}"; CLAVE=""; continue; fi
+    (( SEC == 3 )) || continue
+    if [[ "$LINEA" =~ ^###[[:space:]] ]]; then
+        CLAVE=""
+        if [[ "$LINEA" =~ ^###[[:space:]]+Contrato:[[:space:]]*(.*)$ ]]; then
+            CLAVE="${BASH_REMATCH[1]}"
+            [[ "$CLAVE" =~ ^(.*)\(ronda[[:space:]]+[0-9]+\)[[:space:]]*$ ]] && CLAVE="${BASH_REMATCH[1]}"
+            CLAVE="$(recortar "${CLAVE,,}")"
+            [[ -n "$CLAVE" ]] && CONTRATO["$CLAVE"]=firmado
+        fi
+    fi
+    [[ -n "$CLAVE" && "$LINEA" == *"$MARCA"* ]] && CONTRATO["$CLAVE"]="sin firmar"
+done < <(leer "$ESPEC")
+
 # --- Plan: lotes ---------------------------------------------------------------------------
 # Un lote = fila "| <n> | ..." con su id en negrita en la columna Lote (**A1**). Se recorren todas para saber qué ids
 # existen ("tras X"); se comprueban las de la ronda N (en alto, todas).
@@ -100,6 +120,15 @@ for LINEA in "${FILAS[@]}"; do
     elif [[ "$COMANDO" == *...* || "$COMANDO" =~ $HUECO || "$COMANDO" == *"$MARCA"* ]]; then
         falta "plan: lote $ID con el comando de comprobación sin completar: ${COMANDO:0:80}"
     fi
+    while IFS= read -r C; do
+        C="$(recortar "${C#*:}")"; C="${C,,}"
+        [[ -n "$C" ]] || continue
+        case "${CONTRATO[$C]:-}" in
+            firmado) ;;
+            "sin firmar") falta "plan: lote $ID consume el contrato «$C», sin firmar en §3 de la especificación (le queda «POR ESCRIBIR»)" ;;
+            *) falta "plan: lote $ID consume el contrato «$C», que no tiene apartado «### Contrato: $C» en §3 de la especificación" ;;
+        esac
+    done < <(grep -oiE 'contrato:[[:space:]]*[^,)]+' <<< "$LOTE" || true)
     if [[ "$LOTE" =~ tras[[:space:]]+([^\)]*) ]]; then
         for DEP in $(grep -oE '[A-Za-z]+[0-9]+' <<< "${BASH_REMATCH[1]}"); do
             [[ "$NIVEL" == alto && -z "${EXISTE[$DEP]:-}" ]] && falta "plan: lote $ID va «tras $DEP», que no existe en el plan"
@@ -157,8 +186,8 @@ fi
 if [[ "$NIVEL" == alto ]]; then
     CUOTA="$(leer "$PLAN" | sed -nE 's/.*\*\*Cuota:\*\*[[:space:]]*(.*)$/\1/p' | head -n1)"
     CUOTA="$(recortar "$CUOTA")"
-    if [[ -z "$CUOTA" || "${CUOTA,,}" == *"a decidir"* || "$CUOTA" == *"$MARCA"* ]]; then
-        falta "plan: la Cuota de la cabecera no está definida («${CUOTA:-vacía}»); en nivel alto es obligatoria"
+    if [[ ! "${CUOTA,,}" =~ ^[0-9]+([.,][0-9]+)?[[:space:]]*usd[[:space:]]+por[[:space:]]+ronda ]]; then
+        falta "plan: la Cuota de la cabecera no está definida como «<n> USD por ronda» («${CUOTA:-vacía}»); en nivel alto es obligatoria"
     fi
 fi
 

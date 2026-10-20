@@ -135,6 +135,7 @@ La idea es la de un pequeño estudio:
 | `pre-commit` | Al guardar: exige la línea del tablón y que tenga hora real. |
 | `commit-msg` | Al guardar: exige `"<rol>: ..."` y que todo sea de ese rol (también las líneas del tablón: nadie guarda la línea de otro). |
 | `pre-commit-motor.sh` | *(opcional)* comprobaciones propias del motor. |
+| `nuevo_uid.sh` | *(solo Godot)* crea el `.uid` de un script sin abrir el motor (p. ej. en la nube). |
 | `volcar_entregas_nube.sh` | Pasa al tablón las líneas de la nube. |
 | `archivar_tablon.sh` | El coordinador archiva las líneas viejas del tablón (ya leídas por todos). |
 | `linea_estado.sh` | Línea de estado: rol de la ventana y su contexto (y lo apunta). |
@@ -155,6 +156,7 @@ La idea es la de un pequeño estudio:
 | `tools/auditoria/auditoria_proceso.sh` | Revisión del proceso que hace el auditor. |
 | `tools/auditoria/preparacion_ronda.sh` | Puerta antes de lanzar la ronda N: dice qué falta por escribir según el nivel. |
 | `tools/auditoria/ruido_motor.txt` | Errores del motor que el auditor ha dado por benignos. |
+| `tools/auditoria/excepciones_proceso.txt` | Commits que la auditoría de proceso no revisa (el del despliegue); lo crea el despliegue. |
 
 ---
 
@@ -177,7 +179,8 @@ La idea es la de un pequeño estudio:
    tiene un rol fijo ([sección 6](#6-cómo-se-trabaja-en-el-día-a-día)).
 
 > [!NOTE]
-> **Requisitos:** git, bash (en Windows, Git Bash) y Python 3.
+> **Requisitos:** git, bash 4 o posterior (en Windows, Git Bash; en macOS, `brew install bash`) y Python 3. En nivel
+> alto, además, `claude` en la terminal para el despachador.
 
 ---
 
@@ -278,7 +281,9 @@ Tú, lote a lote. Pasas los avisos entre ventanas y haces `/clear` tras cada lot
 
 Pides al coordinador *"lanza la ronda N"*. Él pasa la puerta (`preparacion_ronda.sh N`), marca los lotes en el plan y
 despierta solo las ventanas que tocan, sin poner a dos roles sobre los mismos archivos, hasta que el auditor cierra la
-ronda. Las rondas solo se lanzan cuando tú lo pides; mientras tanto, las ventanas esperan.
+ronda. Las rondas solo se lanzan cuando tú lo pides; mientras tanto, las ventanas esperan. Un lote con tantos
+rechazos del auditor como diga el tope (`MAX_RECHAZOS`, 3 por defecto) pasa a `bloqueado` y te llega en
+`pendientes_manana.md`.
 
 </details>
 
@@ -291,12 +296,15 @@ puerta sale bien, en una rama `autonomo/<fecha>` (nunca hace push ni merge). Las
 criterios de la especificación (§4) y solo te llega lo que cuesta dinero, toca licencias o cambia la visión.
 
 - **Topes:** la cuota *"&lt;n&gt; USD por ronda"* del plan y 80 turnos y 60 min por sesión
-  (`DESPACHADOR_MAX_TURNOS`, `DESPACHADOR_TIEMPO_MAX`).
+  (`DESPACHADOR_MAX_TURNOS`, `DESPACHADOR_TIEMPO_MAX`). `DESPACHADOR_MODELO` fija el modelo de las sesiones.
+- **Lotes bloqueados:** un lote con una duda de compras, licencias o visión, o que llega al tope de intentos
+  (`MAX_RECHAZOS`), pasa a `bloqueado` (y lo que va tras él); la pregunta va a `pendientes_manana.md` y el
+  despachador sigue con el siguiente.
 - **Para pararlo**, crea el archivo `.parar` en la carpeta del proyecto (`touch .parar`): el lote en marcha acaba y no
   empieza otro; para seguir, bórralo y vuelve a lanzarlo (reanuda la rama).
 - Al acabar te deja un resumen (hecho, bloqueado y por qué, coste estimado) y la orden para revisar la rama; la
   fusionas tú.
-- `./tools/despachador.sh --simular` dice qué lanzaría, sin lanzar nada.
+- `./tools/despachador.sh --simular` dice qué lanzaría, sin lanzar nada; `--ronda N` empieza por la ronda N.
 
 </details>
 
@@ -348,7 +356,7 @@ reglas de git, candados, auditoría de proceso y nube.
 
   | Motor | Orden |
   |---|---|
-  | Godot | `godot --audio-driver Dummy --headless` |
+  | Godot | `godot --audio-driver Dummy` (más `--headless` para importar, tests y exportar; las capturas necesitan ventana) |
   | Unity | `Unity -batchmode -nographics -logFile - -projectPath <carpeta>` |
   | Unreal | `UnrealEditor-Cmd <proyecto>.uproject -nosound -unattended -nullrhi` |
 
@@ -397,7 +405,8 @@ reglas de git, candados, auditoría de proceso y nube.
   específica de aquel proyecto. Se incluye `tools/hooks/tests/prueba_guardas.sh`, más corta.
 - **Unreal.** En Unreal conviene Git LFS para los `.uasset`; la plantilla no lo configura sola.
 - **Puerta de ronda.** La puerta de ronda comprueba la FORMA, no la calidad: que no queden "(POR ESCRIBIR" y que cada
-  lote tenga criterio y un comando sin huecos ("...", "&lt;ruta&gt;"). No ejecuta el comando ni juzga si lo escrito es
+  lote tenga criterio y un comando sin huecos ("...", "&lt;ruta&gt;"), que sus contratos estén firmados y, en alto,
+  que existan sus dependencias ("tras X") y la cuota en USD. No ejecuta el comando ni juzga si lo escrito es
   bueno: eso lo hacen la persona y el auditor.
 - **Despachador.** El despachador del nivel alto depende de opciones de `claude -p` que cambian rápido: si la ayuda de
   claude no las tiene, no arranca. El coste es la estimación de claude, no la factura, y una sesión puede pasarse un
@@ -421,3 +430,5 @@ reglas de git, candados, auditoría de proceso y nube.
 | [`.github/workflows/`](.github/workflows/) | Prueba automática de la plantilla (despliegue Godot y Unity + pruebas, en Linux, macOS y Windows; en Linux, también los tres niveles de autonomía). |
 | [`plantilla/`](plantilla/) | Todos los archivos genéricos, con huecos `{{ASI}}`. |
 | [`extras/godot`](extras/godot), [`extras/unity`](extras/unity) | Comprobaciones propias de cada motor. |
+| [`propuestas/`](propuestas/) | Decisiones de diseño de la plantilla (p. ej. el ADR del despachador). No se despliegan. |
+| `.gdignore` | Hace que Godot ignore esta carpeta si queda dentro de un proyecto de Godot. |

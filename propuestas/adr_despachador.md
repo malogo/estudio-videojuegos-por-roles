@@ -1,7 +1,8 @@
 # ADR: despachador del nivel de autonomía `alto`
 
 Fecha: 2026-10-20 · Estado: **aprobado** por la persona responsable el 2026-10-20, con las respuestas y ajustes de §5.
-Origen: fase 8 del plan de niveles de autonomía; se implementa en la fase 9 (`plantilla/tools/despachador.sh`).
+Origen: fase 8 del plan de niveles de autonomía; implementado en la fase 9 (`plantilla/tools/despachador.sh`, pruebas con
+`plantilla/tools/hooks/tests/claude_falso.sh` en `prueba_guardas.sh`).
 
 ## 1. Contexto
 
@@ -183,7 +184,8 @@ motor ocupado; segundo despachador (75); nivel que no es `alto`; `--simular` sin
   vive en el tablón y el plan, así que se puede reanudar.
 - **En contra / riesgos**:
   - Depende de opciones de `claude -p` que cambian rápido (`--max-budget-usd`, `dontAsk`, el defecto de `--bare`): el
-    script comprueba al arrancar que `claude --help` las tiene y, si no, no arranca.
+    script comprueba al arrancar que `claude --help` las tiene (salvo `--max-turns`, que la ayuda no
+    lista) y, si no, no arranca.
   - El coste es una estimación del cliente: el tope real puede pasarse en una respuesta por sesión.
   - Sin paralelismo, una ronda tarda la suma de sus lotes.
   - Con `Bash` abierto, la barrera son los hooks; las escrituras por terminal en archivos ajenos se ven al commitear

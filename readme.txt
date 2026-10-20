@@ -71,12 +71,14 @@ Hooks ............ guardas automáticas que bloquean lo prohibido.
 Candado .......... impide que dos sesiones usen el motor o hagan una build a la vez.
 Autonomía ........ nivel bajo, medio (por defecto) o alto: cuánto trabaja el sistema sin ti.
 Puerta de ronda .. comprobación de que lo escrito basta para lanzar una ronda en ese nivel.
+Despachador ...... en nivel alto, el script que encadena las rondas sin ventanas abiertas.
 
 
 4. MAPA DE CARPETAS (lo que crea el despliegue en el proyecto)
 --------------------------------------------------------------
 CLAUDE.md                          Lo primero que lee cada sesión: cómo arrancar con su rol.
-.gitignore                         Archivos que nunca se guardan (cachés y logs del motor, candados).
+.gitignore                         Archivos que nunca se guardan (cachés y logs del motor, candados,
+                                   .parar y registro del despachador).
 .gitattributes                     Scripts siempre con finales de línea LF (y, si hace falta, Git LFS).
 .claude/settings.json              Activa los hooks y la línea de estado, y prohíbe los subagentes genéricos.
 .claude/agents/                    Los 3 subagentes del proyecto:
@@ -118,10 +120,13 @@ tools/hooks/                       Las guardas:
    contexto.sh, requisitos.sh
    tests/prueba_guardas.sh         Prueba rápida de que todas las guardas funcionan.
    tests/motor_falso.sh            Motor de mentira para esas pruebas (no hace falta el real).
+   tests/claude_falso.sh           Claude de mentira para probar el despachador (sigue un guion).
 tools/locks/with_lock.sh           Los candados.
 tools/motor_silencioso.sh          ÚNICA forma de abrir el motor: sin sonido y con candado. Guarda la
                                    salida en .motor_logs/ y da un resumen corto con los errores y los
                                    archivos que el motor ha creado o cambiado (por dueño).
+tools/despachador.sh               Nivel alto: encadena las rondas con una sesión "claude -p" nueva por
+                                   lote, en una rama autonomo/<fecha>; registro en .despachador_logs/.
 tools/auditoria/auditoria_proceso.sh  Revisión del proceso que hace el auditor.
 tools/auditoria/preparacion_ronda.sh  Puerta antes de lanzar la ronda N: dice qué falta por escribir según el nivel.
 tools/auditoria/ruido_motor.txt    Errores del motor que el auditor ha dado por benignos.
@@ -220,9 +225,17 @@ tú copies nada. En una terminal funciona igual, pero los avisos los escribes t�
     (preparacion_ronda.sh N), marca los lotes en el plan y despierta solo las ventanas que
     tocan, sin poner a dos roles sobre los mismos archivos, hasta que el auditor cierra la
     ronda. Las rondas solo se lanzan cuando tú lo pides; mientras tanto, las ventanas esperan.
-  - alto: las rondas se encadenan sin esperarte, cada una solo si su puerta sale bien; las
-    dudas técnicas se deciden con los criterios de la especificación (§4) y solo te llega lo
-    que cuesta dinero, toca licencias o cambia la visión. Revisas la rama al final.
+  - alto: lanzas tú ./tools/despachador.sh desde tu terminal, con las demás ventanas cerradas, y
+    te vas. Abre una sesión nueva de "claude -p" por lote, con el rol fijado, y otra del auditor
+    si entrega; encadena las rondas, cada una solo si su puerta sale bien, en una rama
+    autonomo/<fecha> (nunca hace push ni merge). Las dudas técnicas se deciden con los criterios
+    de la especificación (§4) y solo te llega lo que cuesta dinero, toca licencias o cambia la
+    visión. Topes: la cuota "<n> USD por ronda" del plan y 80 turnos y 60 min por sesión
+    (DESPACHADOR_MAX_TURNOS, DESPACHADOR_TIEMPO_MAX). Para pararlo, crea el archivo .parar en la
+    carpeta del proyecto (touch .parar): el lote en marcha acaba y no empieza otro; para seguir,
+    bórralo y vuelve a lanzarlo (reanuda la rama). Al acabar te deja un resumen (hecho, bloqueado
+    y por qué, coste estimado) y la orden para revisar la rama; la fusionas tú.
+    ./tools/despachador.sh --simular dice qué lanzaría, sin lanzar nada.
   Con cualquier nivel, si la puerta no sale bien la ronda no se lanza y lo que falta va a
   pendientes_manana.md.
 
@@ -308,9 +321,12 @@ Cambia según la plataforma:
 - La puerta de ronda comprueba la FORMA, no la calidad: que no queden "(POR ESCRIBIR" y que cada
   lote tenga criterio y un comando sin huecos ("...", "<ruta>"). No ejecuta el comando ni juzga si lo
   escrito es bueno: eso lo hacen la persona y el auditor.
-- El nivel alto, por ahora, encadena las rondas desde la ventana del coordinador: alguien tiene que
-  tener las ventanas abiertas. El trabajo realmente desatendido (un despachador que abra una sesión
-  nueva por lote, con topes de gasto y parada) está en diseño y no viene en la plantilla.
+- El despachador del nivel alto depende de opciones de "claude -p" que cambian rápido: si la ayuda
+  de claude no las tiene, no arranca. El coste es la estimación de claude, no la factura, y una
+  sesión puede pasarse un poco de su tope. Va de lote en lote (sin paralelismo). Con Bash abierto,
+  lo que una sesión escriba desde la terminal en archivos ajenos solo se ve al guardar (commit) y en
+  la limpieza tras cada sesión, que deshace lo que queda sin guardar en las rutas de su rol (con
+  copia en .despachador_logs/) y apunta lo demás en el resumen.
 
 
 9. QUÉ HAY EN ESTA CARPETA

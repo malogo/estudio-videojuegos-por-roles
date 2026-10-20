@@ -22,8 +22,9 @@
   `./tools/auditoria/preparacion_ronda.sh <N>` sale con 0 (si no, lo que falta va a `pendientes_manana.md`).
 {{#FIN}}
 {{#SI NIVEL_AUTONOMIA=alto}}
-- Planifica todas las rondas en `plan_nocturno.md` y las encadena sin esperar a la persona responsable, cada una solo si
-  `./tools/auditoria/preparacion_ronda.sh <N>` sale con 0. Decide las dudas de gestión con §4 de la especificación.
+- Planifica todas las rondas en `plan_nocturno.md`; las encadena `./tools/despachador.sh` (lo lanza la persona
+  responsable), cada una solo si `./tools/auditoria/preparacion_ronda.sh <N>` sale con 0. El despachador cambia el estado
+  de los lotes en su nombre (filas `Encargo`, `Fallo`, `Estado` y `Pausa`). Decide las dudas de gestión con §4 de la especificación.
 {{#FIN}}
 {{#SI NIVEL_AUTONOMIA=medio,alto}}
 - Lo primero tras el despliegue: escribir con la persona responsable la especificación y el plan de la ronda 1

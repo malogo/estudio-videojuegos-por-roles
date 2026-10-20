@@ -9,7 +9,7 @@ marcadores `{{ASI}}` de `plantilla/`. Una clave con lista repite la línea por e
 
 | # | Pregunta | Opciones | Por defecto | Clave · archivos que cambia |
 |---|---|---|---|---|
-| A0 | ¿Qué nivel de autonomía quieres? Cuanto menos intervengas durante el trabajo, más hay que dejar escrito antes. | `bajo`: control paso a paso; basta la visión general (§1 de la especificación) y lo demás se completa lote a lote · `medio`: rondas supervisadas; antes de la ronda N, sus sistemas y contratos escritos · `alto`: flujo desatendido; antes de la ronda 1, la especificación entera (§1-§4, con criterios de desempate) | `medio` | `NIVEL_AUTONOMIA` · normas §9, especificaciones.md, plan_nocturno.md, ficha de coordinador. En `medio` y `alto`, lo primero tras desplegar es escribir la especificación con el coordinador |
+| A0 | ¿Qué nivel de autonomía quieres? Cuanto menos intervengas durante el trabajo, más hay que dejar escrito antes. | `bajo`: control paso a paso; basta la visión general (§1 de la especificación) y lo demás se completa lote a lote · `medio`: rondas supervisadas; antes de la ronda N, sus sistemas y contratos escritos · `alto`: flujo desatendido con `tools/despachador.sh` (una sesión `claude -p` por lote, en una rama aparte); antes de la ronda 1, la especificación entera (§1-§4, con criterios de desempate) y la cuota en USD | `medio` | `NIVEL_AUTONOMIA` · normas §9, especificaciones.md, plan_nocturno.md, ficha de coordinador. En `medio` y `alto`, lo primero tras desplegar es escribir la especificación con el coordinador |
 | A1 | ¿Cómo se llama el proyecto? | texto libre | nombre de la carpeta | `NOMBRE_PROYECTO` · CLAUDE.md, especificaciones.md |
 | A2 | Describe el juego en 1-2 frases (género, modo de juego, modelo de negocio). | texto libre | «(POR ESCRIBIR: descripción en 1-2 frases)» | `DESCRIPCION_PRODUCTO` · normas §10, especificaciones.md |
 | A3 | ¿En qué plataformas saldrá? | PC (Windows/macOS/Linux), móvil (Android/iOS), consola, web; varias | PC | `PLATAFORMAS` · normas §10. En consola: ver bloque D (SDK y NDA) |
@@ -62,7 +62,7 @@ En Unity, cada carpeta de `Assets/` lleva también su `.meta` (`Assets/Art.meta`
 | E1 | ¿Qué modelo usan los subagentes que ejecutan código? | `sonnet`, `opus`, `haiku` (alias de Claude Code) | `sonnet` | `MODELO_EJECUTOR` · agentes, normas §6 |
 | E2 | ¿Y el subagente de solo lectura? | `haiku`, `sonnet` | `haiku` | `MODELO_LECTOR` · agente-buscador-lectura, normas §6 |
 | E3 | ¿Cuántas sesiones a la vez como máximo? | 1-4 | 2 | `MAX_SESIONES` · plan_nocturno.md |
-| E4 | ¿Presupuesto o cuota por ronda o por lote? | texto | «a decidir» | `CUOTA` · plan_nocturno.md |
+| E4 | ¿Presupuesto o cuota por ronda o por lote? | texto; en nivel `alto`, `<n> USD por ronda` (entero o decimal: lo exige la puerta y es el tope de gasto del despachador) | «a decidir» | `CUOTA` · plan_nocturno.md |
 | E5 | ¿Se trabajará con sesiones en la nube (Claude Code en la web)? | sí / no | sí | no: se puede quitar la §11 de normas (los hooks siguen igual) |
 | E6 | ¿Zona horaria del equipo? | nombre IANA + regla POSIX | `Europe/Madrid` y `CET-1CEST,M3.5.0,M10.5.0/3` | `ZONA_HORARIA`, `ZONA_HORARIA_POSIX` · pre-commit, auditoría, normas §11 |
 | E7 | ¿Cuántos rechazos de `auditor-calidad` por lote antes de bloquearlo? | entero ≥ 1 | 3 | `MAX_RECHAZOS` · especificaciones.md §4, normas §9, ficha de auditor-calidad |

@@ -119,17 +119,26 @@
 - Con {{MAX_RECHAZOS}} rechazos de `auditor-calidad`, el lote pasa a `bloqueado` y se avisa a la persona responsable en `pendientes_manana.md`.
 {{#FIN}}
 {{#SI NIVEL_AUTONOMIA=alto}}
-- Nivel `alto` (flujo desatendido): las rondas no esperan a la persona responsable; al cerrar una `auditor-calidad`,
-  `coordinador` lanza la siguiente si su puerta sale con 0. La persona responsable revisa la rama al final.
+- Nivel `alto` (flujo desatendido): las rondas las encadena `./tools/despachador.sh`, que lanza la persona responsable
+  desde su terminal (nunca una sesión): una sesión nueva de `claude -p` por lote, con el rol fijado, y otra de
+  `auditor-calidad` si entrega; cada ronda, solo si su puerta sale con 0. Trabaja en una rama `autonomo/<fecha>` sin
+  push ni merge: la persona responsable la revisa al final y la fusiona. Mientras corre, no hay otras sesiones en la carpeta.
+- Se para con un archivo `.parar` en la raíz, que solo crea o borra la persona responsable desde su terminal: el lote en
+  marcha acaba su ciclo y no se lanza otro. Para seguir, se borra y se relanza el despachador (reanuda la rama).
 - Antes de la ronda 1, §1-§4 de la especificación enteras sin marcadores «POR ESCRIBIR», y todas las rondas del plan con
-  criterio, comando y dependencias («tras X») que existen; la cuota, definida.
+  criterio, comando y dependencias («tras X») que existen; la cuota, como `**Cuota:** <n> USD por ronda` en la cabecera
+  del plan (coste estimado de las sesiones: al agotarse, el despachador declara la pausa en el tablón y para).
 - Ningún lote que consuma un contrato de §3 pasa a `en curso` si su contrato no está firmado.
-- Dudas técnicas internas: las decide `arquitecto-sistemas` (o `coordinador`, si son de gestión) con los criterios de §4
-  de la especificación y las apunta en su memoria. Solo se escala a `pendientes_manana.md` lo que implica compras,
-  licencias/NDA o cambiar la visión o el alcance: ese lote pasa a `bloqueado` y el resto sigue.
-- Con {{MAX_RECHAZOS}} rechazos de `auditor-calidad`, el lote pasa a `bloqueado` sin esperar a nadie (queda anotado en
-  `pendientes_manana.md`) y se sigue con el siguiente.
-- Contexto: cada lote empieza en una sesión nueva (o tras volcar la memoria y `/clear`); no se arrastra contexto entre lotes.
+- En una sesión del despachador: el lote se entrega con `./tools/hooks/entregar.sh <rol> "Lote <id>: <resumen>" "<ruta o
+  commit>" auditor-calidad -- <rutas>` y `auditor-calidad` deja una sola fila: `"Validado <id>: <qué comprobaste>"` hacia
+  `coordinador` o la de rechazo (§8). Sin push, merge ni cambios de rama (las guardas los bloquean).
+- Dudas técnicas internas: las decide el rol con los criterios de §4 de la especificación (las de gestión, como
+  `coordinador`) y las apunta en su memoria. Solo se escala lo que implica compras, licencias/NDA o cambiar la visión o
+  el alcance: fila `"Duda <id>: <pregunta>"` hacia `coordinador` y se termina la sesión; el despachador pasa el lote a
+  `bloqueado` (y lo que va tras él), copia la pregunta en `pendientes_manana.md` y sigue.
+- Con {{MAX_RECHAZOS}} intentos sin validar (rechazos de `auditor-calidad` o sesiones sin entrega), el despachador pasa el
+  lote a `bloqueado` sin esperar a nadie (queda anotado en `pendientes_manana.md`) y sigue con el siguiente.
+- Contexto: cada lote empieza en una sesión nueva; no se arrastra contexto entre lotes.
 {{#FIN}}
 
 ## 10. Producto (recordatorio mínimo)

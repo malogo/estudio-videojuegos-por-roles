@@ -91,4 +91,6 @@ git status --short                           # limpio salvo el informe de audito
 - En nivel `medio` o `alto`, di a la persona que la primera tarea del coordinador es escribir con ella la
   especificación (`docs/direccion/especificaciones.md`) y el plan de la ronda 1, y que
   `./tools/auditoria/preparacion_ronda.sh 1` dice lo que falta antes de poder lanzarla.
+- En nivel `alto`, además, que la cuota va como `<n> USD por ronda` y que las rondas las lanza ella desde su terminal
+  con `./tools/despachador.sh` (`--simular` dice qué haría; `readme.txt`, 6.6).
 - Si hay remoto (GitHub…), sube la rama solo si la persona lo pide.

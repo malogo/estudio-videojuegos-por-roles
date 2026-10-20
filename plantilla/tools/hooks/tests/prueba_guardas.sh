@@ -353,11 +353,13 @@ for MODO in pid flock; do
     if [[ ! -s "$TMP/doble" && -s "$TMP/entraron" ]]; then ok "[$MODO] 20 a la vez: uno dentro ($(wc -l < "$TMP/entraron" | tr -d ' ') en total, nunca dos)"
     else : > "$TMP/salida"; mal "[$MODO] 20 a la vez: dos dentro a la vez o ninguno"; fi
 
-    # kill -9 al envoltorio con el comando vivo: el candado dura lo que dure el comando
-    $CL "${L}3" arquitecto-sistemas sleep 1.5 & W=$!
+    # kill -9 al envoltorio con el comando vivo: el candado dura lo que dure el comando. Comando largo que se mata
+    # tras comprobarlo: con "sleep 1.5", en Git Bash el comando ya había acabado al llegar a la comprobación.
+    $CL "${L}3" arquitecto-sistemas sleep 30 & W=$!
     H="$(pid_comando "${L}3")"
     kill -9 "$W"; wait "$W" 2>/dev/null
     espera_codigo "[$MODO] kill -9 al envoltorio: ocupado mientras viva el comando" 75 "LOCK OCUPADO" $CL "${L}3" coordinador true
+    kill "$H" 2>/dev/null
     esperar_muerte "$H"
     espera_ok "[$MODO] ... y libre cuando el comando acaba" $CL "${L}3" coordinador true
 

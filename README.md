@@ -113,7 +113,7 @@ La idea es la de un pequeño estudio:
 |---|---|
 | `normas_comunes.md` | Las normas de todos, en 11 apartados cortos. |
 | `especificaciones.md` | Qué es el juego (lo escribe el coordinador con la persona) y el nivel de autonomía; lo pendiente lleva "(POR ESCRIBIR: …)". |
-| `tablon.md` | El tablón. |
+| `tablon.md` | Registro compartido de entregas y avisos entre roles. |
 | `plan_nocturno.md` | Los lotes de la ronda. |
 | `pendientes_manana.md` | Las dudas para la persona responsable. |
 | `entregas_nube/` | Líneas del tablón que dejan las sesiones en la nube. |

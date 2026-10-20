@@ -9,8 +9,9 @@ marcadores `{{ASI}}` de `plantilla/`. Una clave con lista repite la línea por e
 
 | # | Pregunta | Opciones | Por defecto | Clave · archivos que cambia |
 |---|---|---|---|---|
+| A0 | ¿Qué nivel de autonomía quieres? Cuanto menos intervengas durante el trabajo, más hay que dejar escrito antes. | `bajo`: control paso a paso; basta la visión general (§1 de la especificación) y lo demás se completa lote a lote · `medio`: rondas supervisadas; antes de la ronda N, sus sistemas y contratos escritos · `alto`: flujo desatendido; antes de la ronda 1, la especificación entera (§1-§4, con criterios de desempate) | `medio` | `NIVEL_AUTONOMIA` · normas §9, especificaciones.md, plan_nocturno.md, ficha de coordinador. En `medio` y `alto`, lo primero tras desplegar es escribir la especificación con el coordinador |
 | A1 | ¿Cómo se llama el proyecto? | texto libre | nombre de la carpeta | `NOMBRE_PROYECTO` · CLAUDE.md, especificaciones.md |
-| A2 | Describe el juego en 1-2 frases (género, modo de juego, modelo de negocio). | texto libre | «(por describir)» | `DESCRIPCION_PRODUCTO` · normas §10, especificaciones.md |
+| A2 | Describe el juego en 1-2 frases (género, modo de juego, modelo de negocio). | texto libre | «(POR ESCRIBIR: descripción en 1-2 frases)» | `DESCRIPCION_PRODUCTO` · normas §10, especificaciones.md |
 | A3 | ¿En qué plataformas saldrá? | PC (Windows/macOS/Linux), móvil (Android/iOS), consola, web; varias | PC | `PLATAFORMAS` · normas §10. En consola: ver bloque D (SDK y NDA) |
 | A4 | ¿Idioma de trabajo de las sesiones y documentos? | español, otro | español | sin clave: si es otro, la sesión traduce todos los archivos tras rellenar |
 | A5 | ¿Carpeta vacía o proyecto que ya existe? | vacía / existente | vacía | si existe: ver paso 6 de desplegar.md (dar dueño a lo que ya hay) |
@@ -64,6 +65,7 @@ En Unity, cada carpeta de `Assets/` lleva también su `.meta` (`Assets/Art.meta`
 | E4 | ¿Presupuesto o cuota por ronda o por lote? | texto | «a decidir» | `CUOTA` · plan_nocturno.md |
 | E5 | ¿Se trabajará con sesiones en la nube (Claude Code en la web)? | sí / no | sí | no: se puede quitar la §11 de normas (los hooks siguen igual) |
 | E6 | ¿Zona horaria del equipo? | nombre IANA + regla POSIX | `Europe/Madrid` y `CET-1CEST,M3.5.0,M10.5.0/3` | `ZONA_HORARIA`, `ZONA_HORARIA_POSIX` · pre-commit, auditoría, normas §11 |
+| E7 | ¿Cuántos rechazos de `auditor-calidad` por lote antes de bloquearlo? | entero ≥ 1 | 3 | `MAX_RECHAZOS` · especificaciones.md §4, normas §9, ficha de auditor-calidad |
 
 ## Bloque F — Versiones, tests y seguridad
 

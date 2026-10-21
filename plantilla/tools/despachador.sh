@@ -24,16 +24,22 @@
 #   del motor o de la build está ocupado se pospone al final de la ronda; si sigue ocupado, cuenta como intento fallido.
 # - Parada: crea .parar en la raíz desde tu terminal (el lote en marcha acaba su ciclo); para seguir, bórralo y relanza.
 # - Tras cada sesión, lo que quede sin commitear en rutas de su rol se copia a .despachador_logs/<ejecución>/sobras/ y
-#   se deshace; lo de otros dueños se queda y va al resumen.
+#   se deshace; lo de otros dueños se queda y va al resumen. También si se interrumpe (Ctrl+C, TERM, HUP): la sesión en
+#   marcha se para con todo su árbol de procesos, se espera y se limpia igual antes de salir.
+# - Cada sesión va en su propio grupo de procesos y con DESPACHADOR_SESION=<marca> en el entorno. Al pararla (tiempo
+#   agotado o interrupción) se mata el árbol entero (tools/hooks/procesos.sh), no solo claude: un motor colgado que
+#   quedara huérfano retendría el candado "motor" y los lotes siguientes acabarían en «candado ocupado».
 # - Registro en .despachador_logs/<ejecución>/ (se guardan las 10 últimas): salida JSON y stderr de cada sesión,
 #   resumen.md e informe de la auditoría de proceso. En la terminal, una línea por sesión y el resumen.
 # Variables: DESPACHADOR_CLAUDE (orden de claude; las pruebas usan tools/hooks/tests/claude_falso.sh),
-#   DESPACHADOR_MAX_TURNOS (80), DESPACHADOR_TIEMPO_MAX (3600 s; luego TERM y, a los 30 s, KILL),
-#   DESPACHADOR_MODELO (--model, opcional).
-# Al arrancar comprueba que `claude --help` lista las opciones que usa (--max-turns no sale en la ayuda: no se mira).
+#   DESPACHADOR_MAX_TURNOS (80), DESPACHADOR_TIEMPO_MAX (3600 s; luego TERM al árbol y, a los 30 s, KILL),
+#   DESPACHADOR_MODELO (--model, opcional) y MOTOR_BIN (como en tools/motor_silencioso.sh).
+# Al arrancar comprueba que `claude --help` lista las opciones que usa (--max-turns no sale en la ayuda: no se mira) y
+# que existe el ejecutable del motor (MOTOR_BIN o el valor por defecto de motor_silencioso.sh).
 # Códigos: 0 terminado (no queda nada lanzable; lo bloqueado va al resumen), 1 parado antes de acabar (cuota, .parar,
 #   puerta de la ronda, árbol sucio al empezar una ronda o un commit del estado que falla), 2 no arranca (nivel, claude,
-#   hooks, .gitignore, árbol sucio, cuota, .parar o rama), 64 uso incorrecto, 75 ya hay otro despachador en marcha.
+#   motor, hooks, .gitignore, árbol sucio, cuota, .parar o rama), 64 uso incorrecto, 75 ya hay otro despachador en
+#   marcha, 129/130/143 interrumpido (HUP/INT/TERM).
 
 set -uo pipefail
 
@@ -65,6 +71,8 @@ cd "$ROOT" || exit 2
 source tools/hooks/propiedad.sh
 # shellcheck source=hooks/leer_json.sh
 source tools/hooks/leer_json.sh
+# shellcheck source=hooks/procesos.sh
+source tools/hooks/procesos.sh
 
 # --- Uno a la vez: todo corre dentro del candado "despachador" (otro despachador sale con 75) ---
 if [[ "${_DESPACHADOR_CON_CANDADO:-}" != 1 ]]; then
@@ -273,10 +281,10 @@ prompt_auditor() {  # <id> <intento> <fila de la entrega>
 
 # sesion <rol> <prompt> <nombre> <tope USD>: lanza claude -p con el rol fijado y espera (vigilando el tiempo).
 # Deja S_CODIGO, S_COSTE (el tope si no se sabe), S_TURNOS, S_TIPO, S_SEGUNDOS, S_AGOTADO y T_LINEAS/T_HUELLA (tablón
-# antes de la sesión).
-SESION_PID=""
+# antes de la sesión). Mientras dura, SESION_PID/ROL/NOMBRE/MARCA dicen a interrumpir() qué parar y limpiar.
+SESION_PID="" SESION_ROL="" SESION_NOMBRE="" SESION_MARCA=""
 sesion() {
-    local rol="$1" prompt="$2" nombre="$3" tope="$4" pid t0 i coste="" tipo="" turnos="" leido=""
+    local rol="$1" prompt="$2" nombre="$3" tope="$4" pid t0 coste="" tipo="" turnos="" leido=""
     local json="$LOGS/$nombre.json" err="$LOGS/$nombre.err"
     local -a a=(-p "$prompt" --permission-mode dontAsk --allowedTools "$PERMITIDAS" --disallowedTools "$PROHIBIDAS"
         --max-turns "$MAX_TURNOS" --max-budget-usd "$tope" --output-format json --no-session-persistence)
@@ -284,22 +292,24 @@ sesion() {
     T_LINEAS="$(lineas_tablon)"
     T_HUELLA="$(huella_tablon "$T_LINEAS")"
     t0=$SECONDS S_AGOTADO=0
-    CLAUDE_ROL="$rol" DESPACHADOR=1 "$CLAUDE" "${a[@]}" < /dev/null > "$json" 2> "$err" &
+    SESION_ROL="$rol" SESION_NOMBRE="$nombre" SESION_MARCA="DESPACHADOR_SESION=$$_$nombre"
+    # set -m: la sesión va en su propio grupo de procesos (lo que quede de ella al pararla, huérfanos incluidos)
+    set -m
+    CLAUDE_ROL="$rol" DESPACHADOR=1 DESPACHADOR_SESION="${SESION_MARCA#*=}" "$CLAUDE" "${a[@]}" < /dev/null > "$json" 2> "$err" &
     pid=$!
+    set +m
     SESION_PID=$pid
     while kill -0 "$pid" 2>/dev/null; do
         if (( SECONDS - t0 >= TIEMPO_MAX )); then
             S_AGOTADO=1
-            kill -TERM "$pid" 2>/dev/null
-            for (( i = 0; i < 30; i++ )); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
-            kill -KILL "$pid" 2>/dev/null
+            parar_arbol "$pid" 30 "$SESION_MARCA"
             break
         fi
         if (( SECONDS - t0 < 5 )); then sleep 0.2; else sleep 1; fi
     done
     wait "$pid"
     S_CODIGO=$?
-    SESION_PID=""
+    SESION_PID="" SESION_ROL="" SESION_NOMBRE="" SESION_MARCA=""
     S_SEGUNDOS=$(( SECONDS - t0 ))
     { IFS= read -r -d '' coste; IFS= read -r -d '' tipo; IFS= read -r -d '' turnos; IFS= read -r -d '' leido; } \
         < <(campos_json total_cost_usd subtype num_turns < "$json" 2>/dev/null)
@@ -485,9 +495,19 @@ terminar() {
     fi
     exit "$cod"
 }
+# Señal: se para la sesión en marcha con su árbol de procesos, se espera y se limpia como tras una sesión normal (así
+# el siguiente arranque no encuentra el árbol sucio). Otra señal durante la limpieza no la corta.
 interrumpir() {
-    [[ -n "$SESION_PID" ]] && kill -TERM "$SESION_PID" 2>/dev/null
-    PARADA="interrumpido (señal); la sesión en marcha se ha parado y puede haber dejado cambios sin commitear"
+    trap '' INT TERM HUP
+    PARADA="interrumpido (señal)"
+    if [[ -n "$SESION_PID" ]]; then
+        dice "Interrumpido: parando la sesión $SESION_NOMBRE y todo lo que lanzó..."
+        parar_arbol "$SESION_PID" 10 "$SESION_MARCA"
+        wait "$SESION_PID" 2>/dev/null
+        limpiar "$SESION_ROL" "$SESION_NOMBRE"
+        PARADA+="; se paró la sesión $SESION_NOMBRE y lo que dejó sin commitear de $SESION_ROL está en sobras/"
+        SESION_PID=""
+    fi
     terminar "$1"
 }
 
@@ -502,6 +522,11 @@ for O in --permission-mode --allowedTools --disallowedTools --max-budget-usd --o
     grep -q -- "$O" <<< "$AYUDA" || FALTAN+=("$O")
 done
 (( ${#FALTAN[@]} == 0 )) || no_arranca "«$CLAUDE --help» no tiene ${FALTAN[*]}: actualiza claude (sin ellas no hay topes ni permisos)."
+# El motor que usarán las sesiones (MOTOR_BIN o el valor por defecto de motor_silencioso.sh; vacío = proyecto sin motor):
+# sin él, cada sesión empezaría con «command not found» y gastaría sus intentos.
+MOTOR="${MOTOR_BIN:-$(sed -n 's/^MOTOR_BIN="\${MOTOR_BIN:-\(.*\)}"$/\1/p' tools/motor_silencioso.sh)}"
+[[ -z "$MOTOR" ]] || command -v "$MOTOR" > /dev/null 2>&1 \
+    || no_arranca "no se encuentra el ejecutable del motor «$MOTOR» (ni en el PATH ni como ruta): pon su ruta completa en MOTOR_BIN o en el valor por defecto de tools/motor_silencioso.sh (en Windows, p. ej. C:/Godot/Godot_v4.7.2-stable_win64_console.exe) y comprueba que ./tools/motor_silencioso.sh coordinador --version funciona."
 [[ "$(git config core.hooksPath)" == tools/hooks ]] \
     || no_arranca "core.hooksPath no es tools/hooks (git config core.hooksPath tools/hooks): sin los hooks de git no hay guardas."
 git check-ignore -q .parar && git check-ignore -q "$LOGS_RAIZ/x" \

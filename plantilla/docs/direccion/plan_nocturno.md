@@ -17,6 +17,13 @@
 - Si se agota la cuota: el coordinador declara la pausa en el tablón (qué sigue, qué espera).
 - Una ronda no empieza hasta que sus dependencias (columna Lote, "tras X") están commiteadas y
   `./tools/auditoria/preparacion_ronda.sh <N>` sale con 0.
+- El comando de comprobación tiene que acabar solo: un motor que no termina se para a los `MOTOR_TIEMPO_MAX` s (300 por
+  defecto) y cuenta como fallo (código 124).
+{{#SI MOTOR_EXTRA=godot}}
+- Godot: un lote que solo tiene scripts se comprueba con `--headless --import` o con un `--script` de prueba, nunca con
+  `--headless --quit` sin escena principal (escribe «Can't run project: no main scene defined» y no acaba). Las
+  capturas necesitan arrancar sin `--headless`.
+{{#FIN}}
 
 ## Lotes
 | # | Rol | Lote | Criterio de hecho | Comando de comprobación | Estado |

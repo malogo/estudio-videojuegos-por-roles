@@ -76,10 +76,14 @@ source tools/hooks/procesos.sh
 
 # --- Uno a la vez: todo corre dentro del candado "despachador" (otro despachador sale con 75) ---
 if [[ "${_DESPACHADOR_CON_CANDADO:-}" != 1 ]]; then
-    _DESPACHADOR_CON_CANDADO=1 exec "$ROOT/tools/locks/with_lock.sh" despachador coordinador \
+    # Ctrl+C llega a todo el grupo en primer plano: este despachador va en segundo plano dentro de with_lock.sh y recibe de él
+    # un TERM. CANDADO_ESPERA_SENAL=120 hace que la terminal no vuelva hasta que acaben la limpieza y el resumen (parar el
+    # árbol de la sesión puede llegar a 10 s de espera más el KILL).
+    _DESPACHADOR_CON_CANDADO=1 CANDADO_ESPERA_SENAL=120 exec "$ROOT/tools/locks/with_lock.sh" despachador coordinador \
         "$ROOT/tools/despachador.sh" ${ARGS[@]+"${ARGS[@]}"}
 fi
-unset _DESPACHADOR_CON_CANDADO
+# Ninguna de las dos variables debe llegar a las sesiones de claude ni al candado "motor" (la espera de 120 s es solo de este)
+unset _DESPACHADOR_CON_CANDADO CANDADO_ESPERA_SENAL
 
 RAMA_PRINCIPAL="{{RAMA_PRINCIPAL}}"
 ZONA="{{ZONA_HORARIA}}"

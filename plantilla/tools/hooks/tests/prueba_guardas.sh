@@ -710,6 +710,24 @@ else { git status --short; ls -R .despachador_logs; } > "$TMP/salida" 2>&1; mal 
 guion "arquitecto-sistemas entrega" "auditor-calidad valida"
 espera_codigo "... y el siguiente arranque reanuda la rama y acaba el lote -> 0" 0 "Hechos: A1" $DP
 
+escenario interrumpir_sordo 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas sordo"
+# Ctrl+C real: la señal llega al with_lock.sh de fuera (el despachador hace exec hacia él) y este se la pasa al de dentro. La
+# terminal no puede volver hasta que el despachador acabe: la sesión sorda a TERM solo muere con el KILL de parar_arbol.
+# (CANDADO_ESPERA_SENAL=7 en el entorno de quien lanza: el despachador pone el suyo y no debe dejar pasar ninguno a la sesión)
+CANDADO_ESPERA_SENAL=7 $DP > "$TMP/interrumpido" 2>&1 & W=$!
+H="$(pid_comando despachador)"
+for (( i = 0; i < 300; i++ )); do [[ -s "$CLAUDE_FALSO_ARGS" ]] && break; sleep 0.1; done   # la sesión sorda ya está en marcha
+sleep 1
+kill -TERM "$W" 2>/dev/null
+wait "$W"
+if ! kill -0 "$H" 2>/dev/null; then ok "TERM al with_lock.sh de fuera con una sesión sorda a TERM -> el despachador de dentro ya no vive al volver"
+else echo "el despachador $H sigue vivo al volver with_lock.sh" > "$TMP/salida"; mal "TERM al with_lock.sh de fuera con una sesión sorda a TERM -> el despachador de dentro ya no vive al volver"; kill -9 "$H" 2>/dev/null; fi
+espera_en "... y su resumen dice que se interrumpió" "$(ls -d .despachador_logs/*/ | tail -n1)resumen.md" "parado: interrumpido"
+if [[ -s "$CLAUDE_FALSO_ARGS" && ! -e "$CLAUDE_FALSO_ARGS.env" ]]; then ok "... y CANDADO_ESPERA_SENAL no llegó a la sesión"
+else cat "$CLAUDE_FALSO_ARGS.env" > "$TMP/salida" 2>&1; mal "... y CANDADO_ESPERA_SENAL no llegó a la sesión"; fi
+espera_codigo "... y relanzar en seguida no da 75" 0 "Lanzaría A1" $DP --simular
+
 escenario candado 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
 $CL motor arquitecto-sistemas sleep 30 & W=$!
 H="$(pid_comando motor)"

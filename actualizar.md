@@ -31,7 +31,34 @@ Copia primero lo de `arquitecto-sistemas`: los hooks nuevos son los que validan 
 - `grep -rn "{{" CLAUDE.md docs tools .claude` solo enseña `{{COMPLETAR}}` ya conocidos (o nada).
 - Una ejecución real del motor: `./tools/motor_silencioso.sh arquitecto-sistemas <argumentos de siempre>`.
 
-## 4. Avisos de esta versión (niveles de autonomía y despachador)
+## 4. Avisos de esta versión (motor y despachador tras la primera prueba en Windows)
+- **Ejecutable del motor** (`cuestionario.md`, B3): en Windows, ruta completa (p. ej.
+  `C:/Godot/Godot_v4.7.2-stable_win64_console.exe`). Si `./tools/motor_silencioso.sh <rol> --version` dice «No se
+  encuentra el ejecutable» (sale con 127), corrige el valor por defecto de `MOTOR_BIN` en `tools/motor_silencioso.sh`
+  al copiarlo. `tools/despachador.sh` ya no arranca (código 2) si no lo encuentra.
+- **Tope del motor**: `MOTOR_TIEMPO_MAX` (300 s por defecto); si se pasa, `motor_silencioso.sh` para el motor con todo
+  lo que lanzó y sale con 124. Los comandos de comprobación del plan tienen que acabar solos (en Godot, nunca
+  `--headless --quit` sin escena principal: ver la cabecera nueva de `plan_nocturno.md`).
+- **Árbol de procesos**: pieza nueva `tools/hooks/procesos.sh` (se copia con el resto de `tools/hooks/`). El despachador
+  la usa al agotarse `DESPACHADOR_TIEMPO_MAX` y al interrumpirlo (Ctrl+C, TERM, HUP): para la sesión con todos sus
+  nietos (antes, en Windows, un Godot colgado quedaba huérfano con el candado `motor`), la espera y deja sus sobras en
+  `.despachador_logs/<ejecución>/sobras/`, así el siguiente arranque no encuentra el árbol sucio.
+- **Informe de la auditoría en el despliegue**: `desplegar.md`, paso 10, lo commitea con el rol de `auditor-calidad`.
+  Si el proyecto tiene un `docs/calidad/auditoria_proceso_<fecha>.md` sin commitear, commitéalo igual (o bórralo).
+- **`./tools/motor_silencioso.sh --ejecutable`**: escribe el ejecutable del motor ya resuelto (`MOTOR_BIN` o su valor
+  por defecto, con un `~/` inicial cambiado por `$HOME/`) y sale con 0, o con 127 si no lo encuentra. No necesita rol ni
+  toma el candado. `tools/despachador.sh` lo usa en vez de leer la línea `MOTOR_BIN=` con `sed`: si el proyecto cambió
+  esa línea, que siga siendo `MOTOR_BIN="${MOTOR_BIN:-<valor>}"`. Se documentan los códigos 124 y 127 en
+  `CLAUDE.md` y en `normas_comunes.md` §5 (fusiónalos si el proyecto los cambió).
+- **`CANDADO_ESPERA_SENAL`** (`tools/locks/with_lock.sh`): segundos que espera al comando tras pasarle TERM al recibir
+  INT, TERM o HUP (10 por defecto). El despachador pide 120, para que Ctrl+C en la terminal no vuelva hasta que acaben
+  su limpieza y el resumen; no llega a las sesiones ni al motor. Al copiar `with_lock.sh` y `despachador.sh`, van juntos.
+- **`GIT_TERMINAL_PROMPT=0`** en el entorno de cada sesión del despachador (ningún git sin terminal se queda pidiendo
+  credenciales); `parar_arbol` manda también CONT tras TERM (procesos detenidos); y la limpieza tras una sesión borra el
+  `.git/index.lock` que esta dejara al cortarla, o para el despachador si el lock es anterior a la sesión.
+- `rellenar_plantilla.py` acepta un `valores.json` sin `MOTOR_EXTRA` (usa «» y lo avisa).
+
+## 5. Avisos de la versión anterior (niveles de autonomía y despachador)
 - **Claves nuevas** `NIVEL_AUTONOMIA` (`bajo`, `medio` o `alto`) y `MAX_RECHAZOS` (`cuestionario.md`, A0 y E7). Si
   `valores.json` no las tiene, `rellenar_plantilla.py` usa `medio` y `3` y lo avisa: añádelas con lo que decida la persona.
 - **Bloques condicionales**: la plantilla lleva `{{#SI NIVEL_AUTONOMIA=…}}` … `{{#FIN}}` y el rellenado deja solo el texto
@@ -65,7 +92,7 @@ Copia primero lo de `arquitecto-sistemas`: los hooks nuevos son los que validan 
   la línea 2 (**Ventana**) del plan, la línea del nivel de la especificación y la de `CLAUDE.md`. Después,
   `./tools/auditoria/auditoria_proceso.sh` sin hallazgos en la sección 6 y `preparacion_ronda.sh <N>` de la próxima ronda.
 
-## 5. Avisos de la versión anterior (historia compartida, portabilidad y contexto)
+## 6. Avisos de versiones anteriores (historia compartida, portabilidad y contexto)
 - **Más órdenes bloqueadas**: `git commit --amend`, `git reset <commit>` y `--soft` (mueven la rama), `git checkout|restore`
   de carpetas o comodines, `git checkout|switch -f`, `export GIT_CONFIG_*`, `git config include.path` y escribir en
   `.git/config` (también con Edit). Las abreviaturas que git acepta (`--amen`, `--no-veri`, `reset --har`) cuentan igual:
@@ -82,7 +109,7 @@ Copia primero lo de `arquitecto-sistemas`: los hooks nuevos son los que validan 
   en CRLF y bash no los entiende. Si en algún equipo ya están en CRLF: con el árbol limpio y las sesiones paradas, la
   persona responsable los vuelve a sacar desde su terminal (`rm -rf tools && git checkout HEAD -- tools`).
 
-## 6. Avisos de versiones anteriores (endurecimiento de candados, motor y tablón)
+## 7. Avisos de versiones anteriores (endurecimiento de candados, motor y tablón)
 - **Código 65 del motor**: `motor_silencioso.sh` sale con 65 si el motor dio 0 pero el log tiene errores. Órdenes
   encadenadas (`... && ...`) que antes pasaban «en falso» ahora paran: es lo buscado. Si el error es ruido benigno,
   lo silencia `auditor-calidad` en `tools/auditoria/ruido_motor.txt`. La salida del motor ya no entra en el contexto:

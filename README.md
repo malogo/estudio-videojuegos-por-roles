@@ -144,7 +144,7 @@ La idea es la de un pequeño estudio:
 | `linea_estado.sh` | Línea de estado: rol de la ventana y su contexto (y lo apunta). |
 | `aviso_contexto.sh` | Al llegar cada mensaje, avisa a la sesión de que toca volcar memoria y vaciar. |
 | `inicio_sesion.sh` | Al abrir, compactar o limpiar una sesión, le recuerda su rol registrado. |
-| `git_guard.sh`, `leer_json.sh`, `contexto.sh`, `requisitos.sh` | Piezas auxiliares (`requisitos.sh`: exige bash 4 o posterior). |
+| `git_guard.sh`, `leer_json.sh`, `contexto.sh`, `requisitos.sh`, `procesos.sh` | Piezas auxiliares (`requisitos.sh`: exige bash 4 o posterior; `procesos.sh`: para un árbol de procesos entero, también en Windows). |
 | `tests/prueba_guardas.sh` | Prueba rápida de que todas las guardas funcionan. |
 | `tests/motor_falso.sh` | Motor de mentira para esas pruebas (no hace falta el real). |
 | `tests/claude_falso.sh` | Claude de mentira para probar el despachador (sigue un guion). |

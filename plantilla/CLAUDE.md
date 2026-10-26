@@ -11,7 +11,8 @@
 ## Recordatorios críticos
 - Solo editas archivos de los que tu rol es dueño (`tools/hooks/propiedad.tsv`).
 - El motor ({{MOTOR}}) solo con `./tools/motor_silencioso.sh <rol> ...`. Nunca con sonido. Da un resumen corto y sale con 0
-  solo si no hay errores (65 = el motor acabó bien pero hay errores en el log).
+  solo si no hay errores (65 = el motor acabó bien pero hay errores en el log; 124 = pasó de `MOTOR_TIEMPO_MAX` y se paró;
+  127 = no se encuentra el ejecutable).
 - Entregas con una orden: `./tools/hooks/entregar.sh <rol> "<qué>" "<ruta o commit>" <destino> -- <rutas>` (fila del tablón
   con hora real + commit por rutas). Prohibido `git stash`, `git add -A`, `git commit -a`, `git commit --amend`, `git commit --no-verify`, `git reset <commit>`
   y escribir en el tablón a mano (lista completa: normas §4).

@@ -76,12 +76,24 @@ printf '# Commits que la comprobación 2 no revisa (hash y motivo)\n%s despliegu
 
 ## 10. Comprobación final (todo debe salir bien)
 ```bash
-./tools/hooks/tests/prueba_guardas.sh        # «Resultado: N/N pruebas OK»
-./tools/auditoria/auditoria_proceso.sh       # «0 hallazgo(s)» (crea docs/calidad/auditoria_proceso_<fecha>.md)
-grep -rn "{{" CLAUDE.md docs tools .claude   # sin resultados
-git status --short                           # limpio salvo el informe de auditoría
+./tools/hooks/tests/prueba_guardas.sh            # «Resultado: N/N pruebas OK»
+./tools/motor_silencioso.sh coordinador --version   # «Resultado: 0» y la versión del motor en el log
+grep -rn "{{" CLAUDE.md docs tools .claude       # sin resultados
 ```
-- El informe de auditoría lo commitea `auditor-calidad` en su primera sesión (o bórralo).
+- `--version` vale para Godot; con otro motor, la orden más corta que lo arranque y acabe. Si dice «No se encuentra
+  el ejecutable» (127), el valor de B3 no es el bueno: en Windows, la ruta completa (`cuestionario.md`, B3). Arréglalo
+  en `MOTOR_BIN` de `tools/motor_silencioso.sh` (y en `valores.json`) y commitéalo como `arquitecto-sistemas`. Si no
+  acaba en 300 s (124), el motor no es ese o se queda esperando algo. Proyecto sin motor (B3 vacío): sáltalo.
+- La auditoría deja su informe en `docs/calidad/`: lo commitea el despliegue con el rol del auditor, como en el paso 9.
+  Si se quedara sin commitear, `tools/despachador.sh` (nivel `alto`) no arrancaría: exige el árbol limpio.
+```bash
+./tools/hooks/fijar_rol.sh auditor-calidad
+./tools/auditoria/auditoria_proceso.sh       # «0 hallazgo(s)» (crea docs/calidad/auditoria_proceso_<fecha>.md)
+I="$(ls -t docs/calidad/auditoria_proceso_*.md | head -n1)"
+./tools/hooks/entregar.sh auditor-calidad "Auditoría de proceso del despliegue" "$I" coordinador -- "$I"
+./tools/hooks/fijar_rol.sh coordinador
+git status --short                           # limpio
+```
 - Si algo falla, arréglalo antes de seguir; no desactives ningún hook.
 
 ## 11. Cierre

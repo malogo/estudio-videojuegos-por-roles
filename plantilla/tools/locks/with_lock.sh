@@ -6,6 +6,10 @@
 #
 # - Si está ocupado sale con código 75, sin bucle de espera (ESPERA_CANDADO=<s> espera como mucho esos segundos).
 # - Devuelve el código de salida del comando.
+# - INT, TERM y HUP se pasan al comando como TERM y se le esperan hasta CANDADO_ESPERA_SENAL segundos (10 por defecto;
+#   si no es un entero >= 1, 10) antes de salir con 130, 143 o 129: quien lanza esto desde una terminal no recupera el
+#   control hasta que el comando acaba o se agota la espera. tools/despachador.sh pide 120: su limpieza puede tardar
+#   (parar el árbol de la sesión, con KILL a los 10 s, y copiar sus sobras).
 # - El candado dura mientras viva el comando, aunque este envoltorio muera (kill -9, sesión cerrada).
 # - Dos modos (CANDADO_MODO=auto|flock|pid; auto = flock si existe la orden):
 #   flock: el núcleo da el candado y lo suelta solo cuando mueren el envoltorio y el comando (que hereda el
@@ -34,6 +38,8 @@ LOCK_FILE="${LOCK_DIR}/${LOCK_NAME}.lock"
 MAX_EDAD=$(( ${CANDADO_MAX_HORAS:-6} * 3600 ))
 ESPERA="${ESPERA_CANDADO:-0}"
 [[ "$ESPERA" =~ ^[0-9]+$ ]] || ESPERA=0
+ESPERA_SENAL="${CANDADO_ESPERA_SENAL:-10}"
+[[ "$ESPERA_SENAL" =~ ^[1-9][0-9]*$ ]] || ESPERA_SENAL=10
 
 MODO="${CANDADO_MODO:-auto}"
 case "$MODO" in
@@ -200,12 +206,12 @@ limpiar() {
     fi
 }
 # INT/TERM/HUP se pasan al comando como TERM (sin control de trabajos, un comando en segundo plano ignora
-# INT) y se le esperan hasta 10 s.
+# INT) y se le esperan hasta ESPERA_SENAL s (CANDADO_ESPERA_SENAL).
 terminar() {
     if [[ -n "$HIJO" ]] && vivo "$HIJO"; then
         kill -TERM "$HIJO" 2>/dev/null
         local i
-        for (( i = 0; i < 20; i++ )); do vivo "$HIJO" || break; sleep 0.5; done
+        for (( i = 0; i < ESPERA_SENAL * 2; i++ )); do vivo "$HIJO" || break; sleep 0.5; done
     fi
     exit "$1"
 }

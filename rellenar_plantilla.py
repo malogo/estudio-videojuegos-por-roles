@@ -42,7 +42,7 @@ BLOQUE_SI = re.compile(r"^\s*\{\{#SI ([A-Z_]+)=([^}]*)\}\}\s*$")
 BLOQUE_FIN = re.compile(r"^\s*\{\{#FIN\}\}\s*$")
 NIVELES = ["bajo", "medio", "alto"]
 # Claves nuevas con valor por defecto: un valores.json de antes sigue valiendo (actualizar.md)
-DEFECTOS = {"NIVEL_AUTONOMIA": "medio", "MAX_RECHAZOS": "3"}
+DEFECTOS = {"NIVEL_AUTONOMIA": "medio", "MAX_RECHAZOS": "3", "MOTOR_EXTRA": ""}
 
 
 def ahora_en(zona):

@@ -5,10 +5,15 @@
 # contador va en "$CLAUDE_FALSO_GUION.n"). Si el rol no es $CLAUDE_ROL o se acaba el guion, sale con 3.
 # Acciones: entrega (fila "Lote <id>: ..." hacia auditor-calidad), valida y rechaza (filas "Validado <id>" hacia
 # coordinador y "Rechazo <id>" hacia el dueño), duda ("Duda <id>: ..." hacia coordinador), nada, sucio (deja sin
-# commitear un archivo nuevo y otro cambiado en tools/hooks/, sin entregar), lento (tarda 30 s) y turnos (sale con 1 y
-# subtype error_max_turns). "+parar" crea .parar al acabar.
+# commitear un archivo nuevo y otro cambiado en tools/hooks/, sin entregar), lento (tarda 30 s), colgado (deja la sobra
+# de "sucio" y lanza tools/motor_silencioso.sh con un motor falso que no acaba: retiene el candado "motor" mientras
+# viva), sordo (deja la sobra de "sucio" e ignora TERM, ella y sus hijos: solo muere con KILL), bloqueo (deja la sobra de
+# "sucio" y un .git/index.lock nuevo, como un git muerto a medias; sin entregar), bloqueo_viejo (igual, con el lock fechado en
+# el año 2000: anterior a la sesión) y turnos (sale con 1 y subtype error_max_turns). "+parar" crea .parar al acabar.
 # El lote sale del prompt ("lote <id>") y el dueño, de "dueño: <rol>". Si existe $CLAUDE_FALSO_ARGS, apunta en él una
-# línea por sesión con CLAUDE_ROL, DESPACHADOR y los argumentos ([uno] [otro]). Imprime el JSON de --output-format json.
+# línea por sesión con CLAUDE_ROL, DESPACHADOR, GIT_TERMINAL_PROMPT y los argumentos ([uno] [otro]); y si en su entorno hay CANDADO_ESPERA_SENAL
+# (no debe llegar: es solo del candado del despachador), lo apunta en "$CLAUDE_FALSO_ARGS.env".
+# Imprime el JSON de --output-format json.
 
 set -uo pipefail
 
@@ -23,10 +28,12 @@ fi
 ARGS=("$@") PROMPT=""
 for (( i = 0; i < ${#ARGS[@]}; i++ )); do [[ "${ARGS[i]}" == -p ]] && PROMPT="${ARGS[i+1]:-}"; done
 if [[ -n "${CLAUDE_FALSO_ARGS:-}" ]]; then
-    { printf 'CLAUDE_ROL=%s DESPACHADOR=%s' "${CLAUDE_ROL:-}" "${DESPACHADOR:-}"
+    { printf 'CLAUDE_ROL=%s DESPACHADOR=%s GIT_TERMINAL_PROMPT=%s' "${CLAUDE_ROL:-}" "${DESPACHADOR:-}" "${GIT_TERMINAL_PROMPT:-}"
       for a in "${ARGS[@]}"; do printf ' [%s]' "${a//$'\n'/ }"; done
       echo; } >> "$CLAUDE_FALSO_ARGS"
 fi
+
+[[ -n "${CANDADO_ESPERA_SENAL:-}" && -n "${CLAUDE_FALSO_ARGS:-}" ]] && echo "CANDADO_ESPERA_SENAL=$CANDADO_ESPERA_SENAL" >> "$CLAUDE_FALSO_ARGS.env"
 
 GUION="${CLAUDE_FALSO_GUION:?Falta CLAUDE_FALSO_GUION}"
 N=$(( $(cat "$GUION.n" 2>/dev/null || echo 0) + 1 ))
@@ -60,6 +67,11 @@ case "$ACCION" in
     nada) ;;
     sucio) echo sobra > tools/hooks/sobra_falsa.txt; echo "# sobra falsa" >> tools/hooks/tests/motor_falso.sh ;;
     lento) exec sleep 30 ;;
+    colgado) echo sobra > tools/hooks/sobra_falsa.txt
+             MOTOR_FALSO_TEXTO="motor colgado" MOTOR_FALSO_SEGUNDOS=120 ./tools/motor_silencioso.sh "$ROL" > /dev/null 2>&1 ;;
+    bloqueo) echo sobra > tools/hooks/sobra_falsa.txt; touch "$(git rev-parse --git-dir)/index.lock" ;;
+    bloqueo_viejo) echo sobra > tools/hooks/sobra_falsa.txt; touch -t 200001010000 "$(git rev-parse --git-dir)/index.lock" ;;
+    sordo) echo sobra > tools/hooks/sobra_falsa.txt; trap '' TERM; sleep 60 ;;
     turnos) R=1 TIPO=error_max_turns ;;
     *) echo "claude falso: acción desconocida '$ACCION'" >&2; R=3 TIPO=error_during_execution ;;
 esac

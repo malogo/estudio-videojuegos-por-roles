@@ -355,6 +355,16 @@ esperar_muerte() {
         sleep 0.1
     done
 }
+# arbol_motor_parado <descripción>: el nieto del motor falso colgado (PID en $TMP/nieto) ya no vive y el candado
+# "motor" no está ocupado (un motor huérfano lo retendría y los lotes siguientes acabarían en 75)
+arbol_motor_parado() {
+    local n e
+    n="$(cat "$TMP/nieto" 2>/dev/null)"
+    [[ -n "$n" ]] && esperar_muerte "$n"
+    e="$(./tools/locks/with_lock.sh --estado motor 2>/dev/null)"
+    if [[ -n "$n" ]] && ! kill -0 "$n" 2>/dev/null && [[ "${e%%|*}" != ocupado && "${e%%|*}" != dudoso ]]; then ok "$1"
+    else echo "nieto: ${n:-no llegó a arrancar}; candado motor: $e" > "$TMP/salida"; mal "$1"; fi
+}
 for MODO in pid flock; do
     if [[ "$MODO" == flock ]] && ! command -v flock >/dev/null 2>&1; then
         echo "  --    sin la orden flock: se omiten las pruebas del modo flock"
@@ -456,6 +466,27 @@ $CL motor arquitecto-sistemas sleep 30 & W=$!
 H="$(pid_comando motor)"
 espera_codigo "candado del motor ocupado -> 75" 75 "LOCK OCUPADO" $MS auditor-calidad
 kill "$H" 2>/dev/null; wait "$W" 2>/dev/null
+# Motor que no acaba (Godot con --quit sin escena principal): tope de tiempo, y se para con su nieto
+rm -f "$TMP/nieto"
+espera_codigo "motor que no acaba (MOTOR_TIEMPO_MAX=3) -> 124 con aviso" 124 "pasó de MOTOR_TIEMPO_MAX (3 s)" \
+    env MOTOR_TIEMPO_MAX=3 MOTOR_FALSO_TEXTO="Can't run project: no main scene defined" MOTOR_FALSO_SEGUNDOS=120 \
+    MOTOR_FALSO_NIETO="$TMP/nieto" $MS auditor-calidad
+arbol_motor_parado "... parado con todo su árbol (nieto muerto, candado motor libre)"
+mkdir -p "$TMP/casa" && cp tools/hooks/tests/motor_falso.sh "$TMP/casa/motor con espacios.sh" && chmod +x "$TMP/casa/motor con espacios.sh"
+espera_codigo "--ejecutable con el motor falso -> 0 y su ruta" 0 "motor_falso.sh" $MS --ejecutable
+espera_codigo "--ejecutable sin motor -> 127" 127 "No se encuentra el ejecutable" env MOTOR_BIN="$TMP/no_existe" $MS --ejecutable
+espera_codigo "--ejecutable con ~/ y espacios -> 0" 0 "casa/motor con espacios.sh" env HOME="$TMP/casa" MOTOR_BIN='~/motor con espacios.sh' $MS --ejecutable
+espera_codigo "motor con ~/ y espacios en MOTOR_BIN se lanza -> 0" 0 "Resultado: 0" env HOME="$TMP/casa" MOTOR_BIN='~/motor con espacios.sh' $MS auditor-calidad
+# Un proceso detenido (SIGTTIN al leer la terminal desde otro grupo) no atiende TERM hasta que sigue: parar_arbol manda CONT
+PARADO="$( source tools/hooks/procesos.sh; set -m; sleep 60 > /dev/null 2>&1 & P=$!; set +m; kill -STOP "$P"
+           t=$SECONDS; parar_arbol "$P" 10; wait "$P" 2>/dev/null
+           if proceso_vivo "$P"; then v=vivo; kill -KILL "$P" 2>/dev/null; else v=muerto; fi
+           echo "$(( SECONDS - t )) $v" )"
+if [[ "$PARADO" =~ ^[0-4]\ muerto$ ]]; then ok "parar_arbol con un proceso detenido -> no agota la espera"
+else echo "tiempo y estado tras parar_arbol: '$PARADO' (se esperaba menos de 5 s y muerto)" > "$TMP/salida"; mal "parar_arbol con un proceso detenido -> no agota la espera"; fi
+espera_codigo "MOTOR_TIEMPO_MAX no válido -> 64" 64 "MOTOR_TIEMPO_MAX" env MOTOR_TIEMPO_MAX=0 $MS auditor-calidad
+espera_codigo "ejecutable del motor inexistente -> 127 con aviso" 127 "No se encuentra el ejecutable" \
+    env MOTOR_BIN="$TMP/no_existe/motor" $MS auditor-calidad
 for i in $(seq 40); do : > ".motor_logs/2000-01-01_0000$(printf '%02d' "$i")_viejo.log"; done
 $MS auditor-calidad >/dev/null 2>&1
 N_LOGS=$(find .motor_logs -name '*.log' | wc -l | tr -d ' ')
@@ -550,6 +581,7 @@ echo "== Despachador del nivel alto (tools/despachador.sh con tools/hooks/tests/
 # Un repo temporal por escenario, en nivel alto y en la rama principal; el guion dice qué hace cada sesión falsa
 RP="$(sed -n 's/^RAMA_PRINCIPAL="\(.*\)"$/\1/p' tools/despachador.sh)"
 export DESPACHADOR_CLAUDE=./tools/hooks/tests/claude_falso.sh
+export MOTOR_BIN="$R/tools/hooks/tests/motor_falso.sh"   # el despachador no arranca sin el ejecutable del motor
 DP=./tools/despachador.sh
 escenario() {  # escenario <nombre> <tope de intentos> <cuota> <filas del plan...>
     local d="$TMP/desp_$1" t="$2" c="$3"
@@ -595,9 +627,9 @@ L1="$(head -n1 "$CLAUDE_FALSO_ARGS")"
 if [[ "$L1" == "CLAUDE_ROL=arquitecto-sistemas DESPACHADOR=1 "* && "$L1" == *"[--permission-mode] [dontAsk]"* \
       && "$L1" == *"[--max-turns] [80]"* && "$L1" == *"[--max-budget-usd] [10.00]"* && "$L1" == *"[--output-format] [json]"* \
       && "$L1" == *"[--no-session-persistence]"* && "$L1" == *"Agent(agente-ejecutor-lote)"* \
-      && "$L1" == *"Bash(./tools/despachador.sh*)"* && "$L1" != *bypass* && "$L1" != *--bare* ]]; then
-    ok "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1 y las opciones de claude del ADR"
-else echo "$L1" > "$TMP/salida"; mal "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1 y las opciones de claude del ADR"; fi
+      && "$L1" == *"Bash(./tools/despachador.sh*)"* && "$L1" != *bypass* && "$L1" != *--bare* && "$L1" == *"GIT_TERMINAL_PROMPT=0"* ]]; then
+    ok "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1, GIT_TERMINAL_PROMPT=0 y las opciones de claude del ADR"
+else echo "$L1" > "$TMP/salida"; mal "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1, GIT_TERMINAL_PROMPT=0 y las opciones de claude del ADR"; fi
 if sed -n 2p "$CLAUDE_FALSO_ARGS" | grep -q "^CLAUDE_ROL=auditor-calidad " && [[ "$(sesiones)" == 4 ]]; then
     ok "... una sesión del rol y otra de auditor-calidad por lote"
 else cp "$CLAUDE_FALSO_ARGS" "$TMP/salida"; mal "... una sesión del rol y otra de auditor-calidad por lote"; fi
@@ -665,6 +697,71 @@ guion "arquitecto-sistemas lento"
 espera_codigo "sesión que pasa de DESPACHADOR_TIEMPO_MAX -> se mata y cuenta como fallo" 0 "Bloqueados: A1" env DESPACHADOR_TIEMPO_MAX=2 $DP
 espera_en "... Fallo por tiempo agotado" docs/direccion/tablon.md "tiempo agotado (2 s)"
 
+escenario colgado 1 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas colgado"
+rm -f "$TMP/nieto"
+espera_codigo "sesión con el motor colgado que pasa de DESPACHADOR_TIEMPO_MAX -> Fallo" 0 "Bloqueados: A1" \
+    env DESPACHADOR_TIEMPO_MAX=8 MOTOR_FALSO_NIETO="$TMP/nieto" $DP
+arbol_motor_parado "... y se mata el árbol entero de la sesión (motor y nieto parados, candado motor libre)"
+
+escenario interrumpir 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas colgado"
+rm -f "$TMP/nieto"
+MOTOR_FALSO_NIETO="$TMP/nieto" $DP > "$TMP/interrumpido" 2>&1 & W=$!
+for (( i = 0; i < 300; i++ )); do [[ -s "$TMP/nieto" ]] && break; sleep 0.1; done   # el motor colgado ya está en marcha
+H="$(pid_comando despachador)"
+kill -TERM "$H" 2>/dev/null
+wait "$W"; RI=$?
+cp "$TMP/interrumpido" "$TMP/salida"
+if (( RI == 143 )) && grep -q "parado: interrumpido" "$TMP/salida"; then ok "TERM al despachador con un motor colgado -> 143"
+else mal "TERM al despachador con un motor colgado -> 143 (código $RI)"; fi
+arbol_motor_parado "... sin dejar vivo nada de la sesión (motor y nieto parados, candado motor libre)"
+S="$(ls -d .despachador_logs/*/ | tail -n1)sobras/r1_A1_arquitecto-sistemas_1"
+if [[ -f "$S/tools/hooks/sobra_falsa.txt" ]] && arbol_limpio; then ok "... con sus sobras copiadas en sobras/ y deshechas (árbol limpio)"
+else { git status --short; ls -R .despachador_logs; } > "$TMP/salida" 2>&1; mal "... con sus sobras copiadas en sobras/ y deshechas (árbol limpio)"; fi
+guion "arquitecto-sistemas entrega" "auditor-calidad valida"
+espera_codigo "... y el siguiente arranque reanuda la rama y acaba el lote -> 0" 0 "Hechos: A1" $DP
+
+escenario interrumpir_sordo 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas sordo"
+# Ctrl+C real: la señal llega al with_lock.sh de fuera (el despachador hace exec hacia él) y este se la pasa al de dentro. La
+# terminal no puede volver hasta que el despachador acabe: la sesión sorda a TERM solo muere con el KILL de parar_arbol.
+# (CANDADO_ESPERA_SENAL=7 en el entorno de quien lanza: el despachador pone el suyo y no debe dejar pasar ninguno a la sesión)
+CANDADO_ESPERA_SENAL=7 $DP > "$TMP/interrumpido" 2>&1 & W=$!
+H="$(pid_comando despachador)"
+for (( i = 0; i < 300; i++ )); do [[ -s "$CLAUDE_FALSO_ARGS" ]] && break; sleep 0.1; done   # la sesión sorda ya está en marcha
+sleep 1
+kill -TERM "$W" 2>/dev/null
+wait "$W"
+if ! kill -0 "$H" 2>/dev/null; then ok "TERM al with_lock.sh de fuera con una sesión sorda a TERM -> el despachador de dentro ya no vive al volver"
+else echo "el despachador $H sigue vivo al volver with_lock.sh" > "$TMP/salida"; mal "TERM al with_lock.sh de fuera con una sesión sorda a TERM -> el despachador de dentro ya no vive al volver"; kill -9 "$H" 2>/dev/null; fi
+espera_en "... y su resumen dice que se interrumpió" "$(ls -d .despachador_logs/*/ | tail -n1)resumen.md" "parado: interrumpido"
+if [[ -s "$CLAUDE_FALSO_ARGS" && ! -e "$CLAUDE_FALSO_ARGS.env" ]]; then ok "... y CANDADO_ESPERA_SENAL no llegó a la sesión"
+else cat "$CLAUDE_FALSO_ARGS.env" > "$TMP/salida" 2>&1; mal "... y CANDADO_ESPERA_SENAL no llegó a la sesión"; fi
+espera_codigo "... y relanzar en seguida no da 75" 0 "Lanzaría A1" $DP --simular
+
+escenario bloqueo 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas bloqueo" "arquitecto-sistemas entrega" "auditor-calidad valida"
+espera_codigo "sesión que deja un .git/index.lock suyo -> se quita y el lote sigue" 0 "Hechos: A1" $DP
+S="$(ls -d .despachador_logs/*/ | tail -n1)sobras/r1_A1_arquitecto-sistemas_1"
+if [[ ! -e .git/index.lock && -f "$S/tools/hooks/sobra_falsa.txt" ]] && arbol_limpio; then
+    ok "... sin index.lock, con su sobra en sobras/ y el árbol limpio"
+else { git status --short; ls -a .git | grep lock; ls -R .despachador_logs; } > "$TMP/salida" 2>&1; mal "... sin index.lock, con su sobra en sobras/ y el árbol limpio"; fi
+
+escenario bloqueo_viejo 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas bloqueo_viejo"
+espera_codigo "un .git/index.lock anterior a la sesión -> para y lo dice" 1 "index.lock no es de la sesión" $DP
+if [[ -e .git/index.lock ]]; then ok "... y no lo borra (no es de la sesión)"; else mal "... y no lo borra (no es de la sesión)"; fi
+rm -f .git/index.lock
+
+escenario motor_home 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+# Valor por defecto del motor con $HOME y espacios (como un proyecto desplegado con «~/...»): el despachador lo resuelve igual
+sed 's|^MOTOR_BIN=.*|MOTOR_BIN="${MOTOR_BIN:-$HOME/motor con espacios.sh}"|' tools/motor_silencioso.sh > "$TMP/ms.nuevo" \
+    && cat "$TMP/ms.nuevo" > tools/motor_silencioso.sh
+grep -q 'HOME/motor con espacios.sh' tools/motor_silencioso.sh || { echo "no se cambió el valor por defecto" > "$TMP/salida"; mal "preparar el valor por defecto en \$HOME"; }
+git -c core.hooksPath=/dev/null commit -q -m "coordinador: motor por defecto en HOME" -- tools/motor_silencioso.sh
+espera_codigo "despachador con MOTOR_BIN por defecto en \$HOME -> arranca" 0 "Lanzaría A1" env -u MOTOR_BIN HOME="$TMP/casa" $DP --simular
+
 escenario candado 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
 $CL motor arquitecto-sistemas sleep 30 & W=$!
 H="$(pid_comando motor)"
@@ -686,10 +783,12 @@ echo "x" > docs/direccion/notas.md
 espera_codigo "árbol sucio al arrancar -> 2" 2 "no está limpio" $DP
 rm -f docs/direccion/notas.md
 espera_codigo "claude sin las opciones que usa -> 2" 2 "no tiene --permission-mode" env DESPACHADOR_CLAUDE=true $DP
+espera_codigo "ejecutable del motor inexistente -> 2" 2 "no se encuentra el ejecutable del motor" \
+    env MOTOR_BIN="$TMP/no_existe/motor" $DP --simular
 espec medio "$SALTO" "$DESEMPATE"
 espera_codigo "nivel medio -> 2" 2 "solo para el nivel alto" $DP --simular
 espera_codigo "argumento desconocido -> 64" 64 "Uso" $DP --rapido
-unset DESPACHADOR_CLAUDE CLAUDE_FALSO_GUION CLAUDE_FALSO_ARGS
+unset DESPACHADOR_CLAUDE CLAUDE_FALSO_GUION CLAUDE_FALSO_ARGS MOTOR_BIN
 cd "$R" || exit 1
 
 echo "== Resultado: $((TOTAL - FALLOS))/$TOTAL pruebas OK"

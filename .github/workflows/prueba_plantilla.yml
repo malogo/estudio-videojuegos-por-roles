@@ -67,8 +67,12 @@ jobs:
             "$(git rev-list --max-parents=0 HEAD)" > tools/auditoria/excepciones_proceso.txt
           ./tools/hooks/entregar.sh auditor-calidad "Excepción del commit de despliegue" tools/auditoria/excepciones_proceso.txt \
             coordinador -- tools/auditoria/excepciones_proceso.txt
+          ./tools/hooks/fijar_rol.sh auditor-calidad > /dev/null
           ./tools/auditoria/auditoria_proceso.sh
-          if git status --short | grep -v '^?? docs/calidad/'; then echo "::error::El árbol no quedó limpio"; exit 1; fi
+          I="$(ls -t docs/calidad/auditoria_proceso_*.md | head -n1)"
+          ./tools/hooks/entregar.sh auditor-calidad "Auditoría de proceso del despliegue" "$I" coordinador -- "$I"
+          ./tools/hooks/fijar_rol.sh coordinador > /dev/null
+          if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then git status --short; echo "::error::El árbol no quedó limpio"; exit 1; fi
 
       - name: Los tres niveles de autonomía (Godot con bajo, medio y alto; valor inválido rechazado)
         if: runner.os == 'Linux' && matrix.motor == 'godot'

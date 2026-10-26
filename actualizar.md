@@ -50,7 +50,7 @@ Copia primero lo de `arquitecto-sistemas`: los hooks nuevos son los que validan 
   copia. En `propiedad.tsv`, la línea `tools/despachador.sh	arquitecto-sistemas` (y en la ficha de arquitecto-sistemas);
   en `.gitignore`, `.parar` y `.despachador_logs/` (sin ellas no arranca). En nivel `alto`, fusiona normas §9 y las
   fichas de `coordinador` y `auditor-calidad`: las rondas ya no las encadena la ventana del coordinador, sino el
-  despachador, que lanza la persona responsable desde su terminal (`readme.txt`, 6.6).
+  despachador, que lanza la persona responsable desde su terminal (`README.md`, 6.6).
 - **Reglas nuevas de órdenes**: `.parar` no se crea, borra ni mueve desde la terminal de una sesión; en las sesiones
   del despachador (`DESPACHADOR=1`) se bloquean `git push`, `pull`, `merge`, `rebase`, `switch`, `checkout -b` y crear o
   borrar ramas.

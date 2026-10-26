@@ -11,7 +11,7 @@
 # "sucio" y un .git/index.lock nuevo, como un git muerto a medias; sin entregar), bloqueo_viejo (igual, con el lock fechado en
 # el año 2000: anterior a la sesión) y turnos (sale con 1 y subtype error_max_turns). "+parar" crea .parar al acabar.
 # El lote sale del prompt ("lote <id>") y el dueño, de "dueño: <rol>". Si existe $CLAUDE_FALSO_ARGS, apunta en él una
-# línea por sesión con CLAUDE_ROL, DESPACHADOR y los argumentos ([uno] [otro]); y si en su entorno hay CANDADO_ESPERA_SENAL
+# línea por sesión con CLAUDE_ROL, DESPACHADOR, GIT_TERMINAL_PROMPT y los argumentos ([uno] [otro]); y si en su entorno hay CANDADO_ESPERA_SENAL
 # (no debe llegar: es solo del candado del despachador), lo apunta en "$CLAUDE_FALSO_ARGS.env".
 # Imprime el JSON de --output-format json.
 
@@ -28,7 +28,7 @@ fi
 ARGS=("$@") PROMPT=""
 for (( i = 0; i < ${#ARGS[@]}; i++ )); do [[ "${ARGS[i]}" == -p ]] && PROMPT="${ARGS[i+1]:-}"; done
 if [[ -n "${CLAUDE_FALSO_ARGS:-}" ]]; then
-    { printf 'CLAUDE_ROL=%s DESPACHADOR=%s' "${CLAUDE_ROL:-}" "${DESPACHADOR:-}"
+    { printf 'CLAUDE_ROL=%s DESPACHADOR=%s GIT_TERMINAL_PROMPT=%s' "${CLAUDE_ROL:-}" "${DESPACHADOR:-}" "${GIT_TERMINAL_PROMPT:-}"
       for a in "${ARGS[@]}"; do printf ' [%s]' "${a//$'\n'/ }"; done
       echo; } >> "$CLAUDE_FALSO_ARGS"
 fi

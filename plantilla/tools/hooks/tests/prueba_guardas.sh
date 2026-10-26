@@ -472,6 +472,13 @@ espera_codigo "motor que no acaba (MOTOR_TIEMPO_MAX=3) -> 124 con aviso" 124 "pa
     env MOTOR_TIEMPO_MAX=3 MOTOR_FALSO_TEXTO="Can't run project: no main scene defined" MOTOR_FALSO_SEGUNDOS=120 \
     MOTOR_FALSO_NIETO="$TMP/nieto" $MS auditor-calidad
 arbol_motor_parado "... parado con todo su árbol (nieto muerto, candado motor libre)"
+# Un proceso detenido (SIGTTIN al leer la terminal desde otro grupo) no atiende TERM hasta que sigue: parar_arbol manda CONT
+PARADO="$( source tools/hooks/procesos.sh; set -m; sleep 60 > /dev/null 2>&1 & P=$!; set +m; kill -STOP "$P"
+           t=$SECONDS; parar_arbol "$P" 10; wait "$P" 2>/dev/null
+           if proceso_vivo "$P"; then v=vivo; kill -KILL "$P" 2>/dev/null; else v=muerto; fi
+           echo "$(( SECONDS - t )) $v" )"
+if [[ "$PARADO" =~ ^[0-4]\ muerto$ ]]; then ok "parar_arbol con un proceso detenido -> no agota la espera"
+else echo "tiempo y estado tras parar_arbol: '$PARADO' (se esperaba menos de 5 s y muerto)" > "$TMP/salida"; mal "parar_arbol con un proceso detenido -> no agota la espera"; fi
 espera_codigo "MOTOR_TIEMPO_MAX no válido -> 64" 64 "MOTOR_TIEMPO_MAX" env MOTOR_TIEMPO_MAX=0 $MS auditor-calidad
 espera_codigo "ejecutable del motor inexistente -> 127 con aviso" 127 "No se encuentra el ejecutable" \
     env MOTOR_BIN="$TMP/no_existe/motor" $MS auditor-calidad
@@ -615,9 +622,9 @@ L1="$(head -n1 "$CLAUDE_FALSO_ARGS")"
 if [[ "$L1" == "CLAUDE_ROL=arquitecto-sistemas DESPACHADOR=1 "* && "$L1" == *"[--permission-mode] [dontAsk]"* \
       && "$L1" == *"[--max-turns] [80]"* && "$L1" == *"[--max-budget-usd] [10.00]"* && "$L1" == *"[--output-format] [json]"* \
       && "$L1" == *"[--no-session-persistence]"* && "$L1" == *"Agent(agente-ejecutor-lote)"* \
-      && "$L1" == *"Bash(./tools/despachador.sh*)"* && "$L1" != *bypass* && "$L1" != *--bare* ]]; then
-    ok "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1 y las opciones de claude del ADR"
-else echo "$L1" > "$TMP/salida"; mal "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1 y las opciones de claude del ADR"; fi
+      && "$L1" == *"Bash(./tools/despachador.sh*)"* && "$L1" != *bypass* && "$L1" != *--bare* && "$L1" == *"GIT_TERMINAL_PROMPT=0"* ]]; then
+    ok "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1, GIT_TERMINAL_PROMPT=0 y las opciones de claude del ADR"
+else echo "$L1" > "$TMP/salida"; mal "... con el rol fijado (CLAUDE_ROL), DESPACHADOR=1, GIT_TERMINAL_PROMPT=0 y las opciones de claude del ADR"; fi
 if sed -n 2p "$CLAUDE_FALSO_ARGS" | grep -q "^CLAUDE_ROL=auditor-calidad " && [[ "$(sesiones)" == 4 ]]; then
     ok "... una sesión del rol y otra de auditor-calidad por lote"
 else cp "$CLAUDE_FALSO_ARGS" "$TMP/salida"; mal "... una sesión del rol y otra de auditor-calidad por lote"; fi

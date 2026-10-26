@@ -5,7 +5,8 @@
 # Uso: source tools/hooks/procesos.sh
 #      proceso_vivo <pid>
 #      parar_arbol <pid> <segundos> [<marca>]
-#   TERM a <pid> y a su árbol; lo que siga vivo a los <segundos>, KILL. No hace `wait`: eso queda para quien lo lanzó.
+#   TERM a <pid> y a su árbol (y CONT, por si alguno está detenido); lo que siga vivo a los <segundos>, KILL. No hace `wait`:
+#   eso queda para quien lo lanzó.
 #   El árbol se apunta ANTES de enviar nada (al morir un padre, sus hijos pierden el enlace) y suma:
 #   - los descendientes por PPID (`ps -A -o pid,ppid,pgid`; en Git Bash, el `ps` de Cygwin, que sigue los exec);
 #   - su grupo de procesos, si <pid> lo encabeza (lanzado con `set -m`): ahí siguen los huérfanos que ya perdieron el PPID;
@@ -65,6 +66,9 @@ parar_arbol() {
     fi
     (( ${#pids[@]} )) || return 0
     kill -TERM "${pids[@]}" 2>/dev/null
+    # Un proceso detenido (SIGTTIN al leer la terminal desde otro grupo, SIGSTOP) no atiende TERM hasta que sigue; sin esto
+    # esperaría los <segundos> enteros y moriría con KILL. En Git Bash (Cygwin) TERM ya lo despierta; en Linux y macOS no.
+    kill -CONT "${pids[@]}" 2>/dev/null
     for (( i = 0; i < seg * 5; i++ )); do
         vivo=0
         for p in "${pids[@]}"; do proceso_vivo "$p" && { vivo=1; break; }; done

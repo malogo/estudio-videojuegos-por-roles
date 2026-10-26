@@ -303,7 +303,8 @@ sesion() {
     touch "$LOGS/$nombre.inicio"
     # set -m: la sesión va en su propio grupo de procesos (lo que quede de ella al pararla, huérfanos incluidos)
     set -m
-    CLAUDE_ROL="$rol" DESPACHADOR=1 DESPACHADOR_SESION="${SESION_MARCA#*=}" "$CLAUDE" "${a[@]}" < /dev/null > "$json" 2> "$err" &
+    # GIT_TERMINAL_PROMPT=0: sin terminal (stdin es /dev/null), ningún git de la sesión debe quedarse pidiendo credenciales
+    CLAUDE_ROL="$rol" DESPACHADOR=1 GIT_TERMINAL_PROMPT=0 DESPACHADOR_SESION="${SESION_MARCA#*=}" "$CLAUDE" "${a[@]}" < /dev/null > "$json" 2> "$err" &
     pid=$!
     set +m
     SESION_PID=$pid

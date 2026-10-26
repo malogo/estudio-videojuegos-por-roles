@@ -472,6 +472,11 @@ espera_codigo "motor que no acaba (MOTOR_TIEMPO_MAX=3) -> 124 con aviso" 124 "pa
     env MOTOR_TIEMPO_MAX=3 MOTOR_FALSO_TEXTO="Can't run project: no main scene defined" MOTOR_FALSO_SEGUNDOS=120 \
     MOTOR_FALSO_NIETO="$TMP/nieto" $MS auditor-calidad
 arbol_motor_parado "... parado con todo su árbol (nieto muerto, candado motor libre)"
+mkdir -p "$TMP/casa" && cp tools/hooks/tests/motor_falso.sh "$TMP/casa/motor con espacios.sh" && chmod +x "$TMP/casa/motor con espacios.sh"
+espera_codigo "--ejecutable con el motor falso -> 0 y su ruta" 0 "motor_falso.sh" $MS --ejecutable
+espera_codigo "--ejecutable sin motor -> 127" 127 "No se encuentra el ejecutable" env MOTOR_BIN="$TMP/no_existe" $MS --ejecutable
+espera_codigo "--ejecutable con ~/ y espacios -> 0" 0 "casa/motor con espacios.sh" env HOME="$TMP/casa" MOTOR_BIN='~/motor con espacios.sh' $MS --ejecutable
+espera_codigo "motor con ~/ y espacios en MOTOR_BIN se lanza -> 0" 0 "Resultado: 0" env HOME="$TMP/casa" MOTOR_BIN='~/motor con espacios.sh' $MS auditor-calidad
 # Un proceso detenido (SIGTTIN al leer la terminal desde otro grupo) no atiende TERM hasta que sigue: parar_arbol manda CONT
 PARADO="$( source tools/hooks/procesos.sh; set -m; sleep 60 > /dev/null 2>&1 & P=$!; set +m; kill -STOP "$P"
            t=$SECONDS; parar_arbol "$P" 10; wait "$P" 2>/dev/null
@@ -748,6 +753,14 @@ guion "arquitecto-sistemas bloqueo_viejo"
 espera_codigo "un .git/index.lock anterior a la sesión -> para y lo dice" 1 "index.lock no es de la sesión" $DP
 if [[ -e .git/index.lock ]]; then ok "... y no lo borra (no es de la sesión)"; else mal "... y no lo borra (no es de la sesión)"; fi
 rm -f .git/index.lock
+
+escenario motor_home 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+# Valor por defecto del motor con $HOME y espacios (como un proyecto desplegado con «~/...»): el despachador lo resuelve igual
+sed 's|^MOTOR_BIN=.*|MOTOR_BIN="${MOTOR_BIN:-$HOME/motor con espacios.sh}"|' tools/motor_silencioso.sh > "$TMP/ms.nuevo" \
+    && cat "$TMP/ms.nuevo" > tools/motor_silencioso.sh
+grep -q 'HOME/motor con espacios.sh' tools/motor_silencioso.sh || { echo "no se cambió el valor por defecto" > "$TMP/salida"; mal "preparar el valor por defecto en \$HOME"; }
+git -c core.hooksPath=/dev/null commit -q -m "coordinador: motor por defecto en HOME" -- tools/motor_silencioso.sh
+espera_codigo "despachador con MOTOR_BIN por defecto en \$HOME -> arranca" 0 "Lanzaría A1" env -u MOTOR_BIN HOME="$TMP/casa" $DP --simular
 
 escenario candado 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
 $CL motor arquitecto-sistemas sleep 30 & W=$!

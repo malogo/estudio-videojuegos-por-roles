@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Uso: ./tools/motor_silencioso.sh <rol> [argumentos del motor...]
+#      ./tools/motor_silencioso.sh --ejecutable   (sin rol, sin candado y sin lanzar nada: escribe el ejecutable ya resuelto)
 # Única forma permitida de lanzar el motor ({{MOTOR}}): siempre sin sonido ni ventanas que suenen,
 # y con el candado "motor" (una sola sesión a la vez usa la caché del proyecto).
 # Funciona desde cualquier carpeta: añade la ruta del proyecto si no se pasa ya.
-# El ejecutable sale de $MOTOR_BIN o, si no está, del valor por defecto de abajo.
+# El ejecutable sale de $MOTOR_BIN o, si no está, del valor por defecto de abajo; un `~/` inicial vale $HOME/. Esta
+# resolución (y la comprobación de que existe) está solo aquí: --ejecutable la da a quien la necesite (tools/despachador.sh
+# y desplegar.md), para que ninguno repita su propia versión. Con el motor vacío (proyecto sin motor) no escribe nada y sale con 0.
 #
 # La salida del motor no llena el contexto: va entera a .motor_logs/<fecha>_<rol>_<pid>.log (se guardan los 30
 # últimos) y aquí solo se imprime un resumen de 25 líneas como mucho: código del motor, errores únicos (los 15
@@ -19,9 +22,28 @@
 # lanzó (tools/hooks/procesos.sh: un motor colgado retendría el candado "motor") y el resumen lo avisa. Pasa, p. ej.,
 # con Godot y `--headless --quit` sin escena principal: escribe «Can't run project: no main scene defined» y no acaba.
 # Código de salida: el del motor si no es 0; 65 si el motor dio 0 pero hay errores; 75 si el candado está ocupado;
-# 124 si se pasó de MOTOR_TIEMPO_MAX; 127 si no se encuentra el ejecutable; 64 si MOTOR_TIEMPO_MAX no es válido.
+# 124 si se pasó de MOTOR_TIEMPO_MAX; 127 si no se encuentra el ejecutable (también con --ejecutable, que si no sale con 0);
+# 64 si MOTOR_TIEMPO_MAX no es válido.
 
 set -uo pipefail
+
+# --- Ejecutable del motor: una sola fuente (MOTOR_BIN o el valor por defecto, con `~/` expandido) ---------------------------
+MOTOR_BIN="${MOTOR_BIN:-{{BINARIO_MOTOR}}}"
+# En una variable el shell no expande `~`: se hace aquí (el lanzamiento y --ejecutable usan ya la ruta resuelta)
+[[ "$MOTOR_BIN" == "~/"* ]] && MOTOR_BIN="${HOME:-}/${MOTOR_BIN#"~/"}"
+# Sin el ejecutable no hay nada que lanzar (en Windows no suele estar en el PATH: ruta completa, cuestionario.md B3)
+comprobar_ejecutable() {
+    [[ -z "$MOTOR_BIN" ]] && return 0
+    command -v "$MOTOR_BIN" > /dev/null 2>&1 && return 0
+    echo "[motor] No se encuentra el ejecutable del motor «$MOTOR_BIN» (ni en el PATH ni como ruta). Pon su ruta completa en MOTOR_BIN o en el valor por defecto de tools/motor_silencioso.sh (lo cuida arquitecto-sistemas)." >&2
+    echo "[motor] Resultado: 127 (sin ejecutable del motor)."
+    return 127
+}
+if [[ "${1:-}" == --ejecutable ]]; then
+    comprobar_ejecutable || exit 127
+    [[ -z "$MOTOR_BIN" ]] || printf '%s\n' "$MOTOR_BIN"
+    exit 0
+fi
 
 ROLE_NAME="${1:?Especifica tu nombre de rol como primer argumento}"
 shift 1
@@ -32,7 +54,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/tools/hooks/propiedad.sh"
 # shellcheck source=hooks/procesos.sh
 source "$ROOT/tools/hooks/procesos.sh"
-MOTOR_BIN="${MOTOR_BIN:-{{BINARIO_MOTOR}}}"
 TIEMPO_MAX="${MOTOR_TIEMPO_MAX:-300}"
 # Argumentos que garantizan "sin sonido" y sin interfaz (ver cuestionario.md, pregunta del motor).
 ARGS_SILENCIO=({{ARGS_MOTOR_SILENCIOSO}})
@@ -50,12 +71,7 @@ MAX_COLATERALES=10
 
 [[ "$TIEMPO_MAX" =~ ^[1-9][0-9]*$ ]] \
     || { echo "[motor] MOTOR_TIEMPO_MAX debe ser un entero >= 1 (segundos; hay '$TIEMPO_MAX')." >&2; exit 64; }
-# Sin el ejecutable no hay nada que lanzar (en Windows no suele estar en el PATH: ruta completa, cuestionario.md B3)
-if [[ -n "$MOTOR_BIN" ]] && ! command -v "$MOTOR_BIN" > /dev/null 2>&1; then
-    echo "[motor] No se encuentra el ejecutable del motor «$MOTOR_BIN» (ni en el PATH ni como ruta). Pon su ruta completa en MOTOR_BIN o en el valor por defecto de tools/motor_silencioso.sh (lo cuida arquitecto-sistemas)." >&2
-    echo "[motor] Resultado: 127 (sin ejecutable del motor)."
-    exit 127
-fi
+comprobar_ejecutable || exit 127
 
 EXTRA=()
 if [[ -n "$ARG_RUTA" && " $* " != *" $ARG_RUTA "* ]]; then

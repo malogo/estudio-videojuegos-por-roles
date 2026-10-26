@@ -52,7 +52,8 @@
   Si avisa de «probable huérfano», comprueba el PID con la orden que da y, si no es el motor ni una build, libéralo como indica.
 - `motor_silencioso.sh` guarda la salida entera en `.motor_logs/` y solo enseña un resumen (≤25 líneas, errores por dueño).
   Sale con el código del motor, o con 65 si el motor dio 0 pero hay errores en el log; con 124 si no acabó en
-  `MOTOR_TIEMPO_MAX` s (300 por defecto: lo para con todo lo que lanzó). No vuelques el log entero al
+  `MOTOR_TIEMPO_MAX` s (300 por defecto: lo para con todo lo que lanzó), y con 127 si no encuentra el ejecutable
+  (`MOTOR_BIN`). No vuelques el log entero al
   contexto: usa `grep`/`tail` sobre él (`MOTOR_SALIDA=completa` es para personas).
 - Si el motor crea o cambia archivos versionables, el resumen los lista por dueño (pueden ser de otra sesión que trabajaba
   a la vez). Los tuyos van en tu entrega; los ajenos, ver §4. No cambia el código de salida.

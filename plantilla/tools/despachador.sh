@@ -36,7 +36,7 @@
 #   DESPACHADOR_MAX_TURNOS (80), DESPACHADOR_TIEMPO_MAX (3600 s; luego TERM al árbol y, a los 30 s, KILL),
 #   DESPACHADOR_MODELO (--model, opcional) y MOTOR_BIN (como en tools/motor_silencioso.sh).
 # Al arrancar comprueba que `claude --help` lista las opciones que usa (--max-turns no sale en la ayuda: no se mira) y
-# que existe el ejecutable del motor (MOTOR_BIN o el valor por defecto de motor_silencioso.sh).
+# que existe el ejecutable del motor (`motor_silencioso.sh --ejecutable`: MOTOR_BIN o su valor por defecto).
 # Códigos: 0 terminado (no queda nada lanzable; lo bloqueado va al resumen), 1 parado antes de acabar (cuota, .parar,
 #   puerta de la ronda, árbol sucio al empezar una ronda, no poder limpiar lo que dejó una sesión o un commit del estado que
 #   falla), 2 no arranca (nivel, claude,
@@ -549,10 +549,10 @@ for O in --permission-mode --allowedTools --disallowedTools --max-budget-usd --o
 done
 (( ${#FALTAN[@]} == 0 )) || no_arranca "«$CLAUDE --help» no tiene ${FALTAN[*]}: actualiza claude (sin ellas no hay topes ni permisos)."
 # El motor que usarán las sesiones (MOTOR_BIN o el valor por defecto de motor_silencioso.sh; vacío = proyecto sin motor):
-# sin él, cada sesión empezaría con «command not found» y gastaría sus intentos.
-MOTOR="${MOTOR_BIN:-$(sed -n 's/^MOTOR_BIN="\${MOTOR_BIN:-\(.*\)}"$/\1/p' tools/motor_silencioso.sh)}"
-[[ -z "$MOTOR" ]] || command -v "$MOTOR" > /dev/null 2>&1 \
-    || no_arranca "no se encuentra el ejecutable del motor «$MOTOR» (ni en el PATH ni como ruta): pon su ruta completa en MOTOR_BIN o en el valor por defecto de tools/motor_silencioso.sh (en Windows, p. ej. C:/Godot/Godot_v4.7.2-stable_win64_console.exe) y comprueba que ./tools/motor_silencioso.sh coordinador --version funciona."
+# sin él, cada sesión empezaría con «command not found» y gastaría sus intentos. Lo resuelve motor_silencioso.sh
+# (--ejecutable: única fuente de la ruta, con `~/` y espacios), que ya avisa de cuál falta.
+MOTOR="$(./tools/motor_silencioso.sh --ejecutable)" \
+    || no_arranca "no se encuentra el ejecutable del motor (ni en el PATH ni como ruta; el aviso de arriba dice cuál): pon su ruta completa en MOTOR_BIN o en el valor por defecto de tools/motor_silencioso.sh (en Windows, p. ej. C:/Godot/Godot_v4.7.2-stable_win64_console.exe) y comprueba que ./tools/motor_silencioso.sh coordinador --version funciona."
 [[ "$(git config core.hooksPath)" == tools/hooks ]] \
     || no_arranca "core.hooksPath no es tools/hooks (git config core.hooksPath tools/hooks): sin los hooks de git no hay guardas."
 git check-ignore -q .parar && git check-ignore -q "$LOGS_RAIZ/x" \

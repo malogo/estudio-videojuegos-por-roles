@@ -45,6 +45,17 @@ Copia primero lo de `arquitecto-sistemas`: los hooks nuevos son los que validan 
   `.despachador_logs/<ejecución>/sobras/`, así el siguiente arranque no encuentra el árbol sucio.
 - **Informe de la auditoría en el despliegue**: `desplegar.md`, paso 10, lo commitea con el rol de `auditor-calidad`.
   Si el proyecto tiene un `docs/calidad/auditoria_proceso_<fecha>.md` sin commitear, commitéalo igual (o bórralo).
+- **`./tools/motor_silencioso.sh --ejecutable`**: escribe el ejecutable del motor ya resuelto (`MOTOR_BIN` o su valor
+  por defecto, con un `~/` inicial cambiado por `$HOME/`) y sale con 0, o con 127 si no lo encuentra. No necesita rol ni
+  toma el candado. `tools/despachador.sh` lo usa en vez de leer la línea `MOTOR_BIN=` con `sed`: si el proyecto cambió
+  esa línea, que siga siendo `MOTOR_BIN="${MOTOR_BIN:-<valor>}"`. Se documentan los códigos 124 y 127 en
+  `CLAUDE.md` y en `normas_comunes.md` §5 (fusiónalos si el proyecto los cambió).
+- **`CANDADO_ESPERA_SENAL`** (`tools/locks/with_lock.sh`): segundos que espera al comando tras pasarle TERM al recibir
+  INT, TERM o HUP (10 por defecto). El despachador pide 120, para que Ctrl+C en la terminal no vuelva hasta que acaben
+  su limpieza y el resumen; no llega a las sesiones ni al motor. Al copiar `with_lock.sh` y `despachador.sh`, van juntos.
+- **`GIT_TERMINAL_PROMPT=0`** en el entorno de cada sesión del despachador (ningún git sin terminal se queda pidiendo
+  credenciales); `parar_arbol` manda también CONT tras TERM (procesos detenidos); y la limpieza tras una sesión borra el
+  `.git/index.lock` que esta dejara al cortarla, o para el despachador si el lock es anterior a la sesión.
 - `rellenar_plantilla.py` acepta un `valores.json` sin `MOTOR_EXTRA` (usa «» y lo avisa).
 
 ## 5. Avisos de la versión anterior (niveles de autonomía y despachador)

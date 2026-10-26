@@ -69,7 +69,7 @@ Que estas decisiones sean deterministas fue una elección de diseño: el ADR del
 1. **Escalados que no se hacen (nivel `alto`).** Según normas §9, cada rol decide sus dudas técnicas con §4 y solo
    escala compras, licencias/NDA o cambios de visión o de alcance. Si una sesión decide sola algo de eso, hoy solo se ve
    cuando la persona revisa la rama, a veces tras una noche de lotes construidos encima.
-2. **La puerta mira la forma, no la calidad** (readme §8). Un criterio de hecho como «queda bien», o un comando que no
+2. **La puerta mira la forma, no la calidad** (`README.md` §8). Un criterio de hecho como «queda bien», o un comando que no
    comprueba el criterio, pasan la puerta. Se descubre después de gastar la sesión del rol y la del auditor.
 3. **Por qué una sesión no entregó.** El despachador anota «sin fila» y repite el encargo. Si la causa era que falta
    información en la especificación, cada intento gasta cuota para nada.
@@ -342,7 +342,7 @@ El banco se repite al cambiar de modelo o de versión. Por eso los ids van con f
 | `docs/direccion/roles/plantilla_memoria.md` | Las decisiones vivas llevan el id del lote: `- <id>: <decisión> (criterio de §4 usado)` | `coordinador` |
 | `.gitignore` | `.decision_logs/` | `arquitecto-sistemas` |
 | `cuestionario.md` (E8, E9), `ejemplo_valores_*.json`, `desplegar.md` | Claves `DECISION_MOTOR` (`ninguno` por defecto) y `DECISION_MODELO`; aviso de privacidad si el motor es de un tercero | plantilla |
-| `readme.txt` (§2, §3, §4 y §8) y `actualizar.md` | Documentación y cómo llevarlo a un proyecto ya desplegado | plantilla |
+| `README.md` (§2, §3, §4, §6.7 y §8) y `actualizar.md` | Documentación y cómo llevarlo a un proyecto ya desplegado | plantilla |
 | `.github/workflows/prueba_plantilla.yml` | Nada nuevo: los casos van en la batería, con el motor falso | plantilla |
 
 ---
@@ -372,7 +372,7 @@ vez al final de cada fase que toque código, en segundo plano.
 7. **Con datos:**
    - C1 pasa a modo aviso;
    - C3, y también C4 y C5 si merecen la pena;
-   - documentación (`readme.txt`, `actualizar.md`) y cuestionario.
+   - documentación (`README.md`, `actualizar.md`) y cuestionario.
 
 Los motores `openai`, `anthropic` y `local_ml` se añaden solo si en la fase 3 hace falta un candidato de su tipo.
 
@@ -404,7 +404,7 @@ el acierto en español, dónde acaban los datos y lo que cuesta instalarlo.
 
 - **Falsos positivos.** Llenan `pendientes_manana.md` de ruido y la persona deja de leerlo. Se mitiga con el modo
   sombra primero, el umbral, el banco de casos y un máximo de avisos por ejecución.
-- **Falsos negativos.** El vigía no sustituye la revisión de la rama. El readme lo dirá igual que dice que la puerta
+- **Falsos negativos.** El vigía no sustituye la revisión de la rama. El README lo dirá igual que dice que la puerta
   comprueba la forma.
 - **Texto que intenta engañar al vigía**, ya que lo escriben las sesiones. Se mitiga marcando el contexto como datos,
   con preguntas atómicas y porque el vigía nunca decide nada.

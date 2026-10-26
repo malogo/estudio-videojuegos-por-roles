@@ -728,6 +728,20 @@ if [[ -s "$CLAUDE_FALSO_ARGS" && ! -e "$CLAUDE_FALSO_ARGS.env" ]]; then ok "... 
 else cat "$CLAUDE_FALSO_ARGS.env" > "$TMP/salida" 2>&1; mal "... y CANDADO_ESPERA_SENAL no llegó a la sesión"; fi
 espera_codigo "... y relanzar en seguida no da 75" 0 "Lanzaría A1" $DP --simular
 
+escenario bloqueo 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas bloqueo" "arquitecto-sistemas entrega" "auditor-calidad valida"
+espera_codigo "sesión que deja un .git/index.lock suyo -> se quita y el lote sigue" 0 "Hechos: A1" $DP
+S="$(ls -d .despachador_logs/*/ | tail -n1)sobras/r1_A1_arquitecto-sistemas_1"
+if [[ ! -e .git/index.lock && -f "$S/tools/hooks/sobra_falsa.txt" ]] && arbol_limpio; then
+    ok "... sin index.lock, con su sobra en sobras/ y el árbol limpio"
+else { git status --short; ls -a .git | grep lock; ls -R .despachador_logs; } > "$TMP/salida" 2>&1; mal "... sin index.lock, con su sobra en sobras/ y el árbol limpio"; fi
+
+escenario bloqueo_viejo 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
+guion "arquitecto-sistemas bloqueo_viejo"
+espera_codigo "un .git/index.lock anterior a la sesión -> para y lo dice" 1 "index.lock no es de la sesión" $DP
+if [[ -e .git/index.lock ]]; then ok "... y no lo borra (no es de la sesión)"; else mal "... y no lo borra (no es de la sesión)"; fi
+rm -f .git/index.lock
+
 escenario candado 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
 $CL motor arquitecto-sistemas sleep 30 & W=$!
 H="$(pid_comando motor)"

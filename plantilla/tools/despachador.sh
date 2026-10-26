@@ -25,7 +25,8 @@
 # - Parada: crea .parar en la raíz desde tu terminal (el lote en marcha acaba su ciclo); para seguir, bórralo y relanza.
 # - Tras cada sesión, lo que quede sin commitear en rutas de su rol se copia a .despachador_logs/<ejecución>/sobras/ y
 #   se deshace; lo de otros dueños se queda y va al resumen. También si se interrumpe (Ctrl+C, TERM, HUP): la sesión en
-#   marcha se para con todo su árbol de procesos, se espera y se limpia igual antes de salir.
+#   marcha se para con todo su árbol de procesos, se espera y se limpia igual antes de salir. Si la sesión cortada dejó un
+#   .git/index.lock (más nuevo que el inicio de la sesión), se borra; si es anterior, el despachador para y lo dice.
 # - Cada sesión va en su propio grupo de procesos y con DESPACHADOR_SESION=<marca> en el entorno. Al pararla (tiempo
 #   agotado o interrupción) se mata el árbol entero (tools/hooks/procesos.sh), no solo claude: un motor colgado que
 #   quedara huérfano retendría el candado "motor" y los lotes siguientes acabarían en «candado ocupado».
@@ -37,7 +38,8 @@
 # Al arrancar comprueba que `claude --help` lista las opciones que usa (--max-turns no sale en la ayuda: no se mira) y
 # que existe el ejecutable del motor (MOTOR_BIN o el valor por defecto de motor_silencioso.sh).
 # Códigos: 0 terminado (no queda nada lanzable; lo bloqueado va al resumen), 1 parado antes de acabar (cuota, .parar,
-#   puerta de la ronda, árbol sucio al empezar una ronda o un commit del estado que falla), 2 no arranca (nivel, claude,
+#   puerta de la ronda, árbol sucio al empezar una ronda, no poder limpiar lo que dejó una sesión o un commit del estado que
+#   falla), 2 no arranca (nivel, claude,
 #   motor, hooks, .gitignore, árbol sucio, cuota, .parar o rama), 64 uso incorrecto, 75 ya hay otro despachador en
 #   marcha, 129/130/143 interrumpido (HUP/INT/TERM).
 
@@ -297,6 +299,8 @@ sesion() {
     T_HUELLA="$(huella_tablon "$T_LINEAS")"
     t0=$SECONDS S_AGOTADO=0
     SESION_ROL="$rol" SESION_NOMBRE="$nombre" SESION_MARCA="DESPACHADOR_SESION=$$_$nombre"
+    # Marca de cuándo empieza la sesión: limpiar la usa para saber si un .git/index.lock es de ella o anterior
+    touch "$LOGS/$nombre.inicio"
     # set -m: la sesión va en su propio grupo de procesos (lo que quede de ella al pararla, huérfanos incluidos)
     set -m
     CLAUDE_ROL="$rol" DESPACHADOR=1 DESPACHADOR_SESION="${SESION_MARCA#*=}" "$CLAUDE" "${a[@]}" < /dev/null > "$json" 2> "$err" &
@@ -335,9 +339,23 @@ linea_sesion() {  # <id> <rol> <intento> <resultado>
 
 # limpiar <rol> <sesión>: lo que quede sin commitear o sin seguimiento en rutas de <rol> se copia a sobras/<sesión>/
 # y se deshace (con historia, vuelve a HEAD; nuevo, se borra). Lo de otros dueños se apunta en OTROS.
+# Antes mira el .git/index.lock: una sesión cortada (tiempo agotado o señal) puede dejar el de un git que mató a medias, y
+# con él ni restore ni rm ni el commit del estado funcionan. Si es más nuevo que la marca de inicio de la sesión es suyo:
+# ya está muerta (mientras corre el despachador no hay otras sesiones en la carpeta, normas §9) y se borra. Si es anterior,
+# es de otro git y no se toca. Devuelve 0 si deja limpio lo de <rol>; si no, dice el motivo con `dice` y devuelve 1.
 limpiar() {
-    local rol="$1" dest="$LOGS/sobras/$2" e x ruta dueno n=0
+    local rol="$1" dest="$LOGS/sobras/$2" marca="$LOGS/$2.inicio" e x ruta dueno n=0 fallos=0 cerrojo
     local -a rutas=()
+    cerrojo="$(git rev-parse --git-dir 2>/dev/null)/index.lock"
+    if [[ -e "$cerrojo" ]]; then
+        if [[ -n "$(find "$cerrojo" -newer "$marca" 2>/dev/null)" ]]; then
+            rm -f -- "$cerrojo"
+            dice "  .git/index.lock quitado: lo dejó la sesión $2 al cortarla."
+        else
+            dice "  .git/index.lock no es de la sesión $2: si no hay otro git en marcha, bórralo (rm -f .git/index.lock) y relanza."
+            return 1
+        fi
+    fi
     while IFS= read -r -d '' e; do
         x="${e:0:2}"
         rutas+=("${e:3}")
@@ -351,15 +369,15 @@ limpiar() {
         fi
         if [[ -e "$ruta" ]]; then mkdir -p "$dest/$(dirname "$ruta")" && cp -p -- "$ruta" "$dest/$ruta"; fi
         if git cat-file -e "HEAD:$ruta" 2>/dev/null; then
-            git restore --source=HEAD --staged --worktree -- "$ruta"
+            git restore --source=HEAD --staged --worktree -- "$ruta" || { dice "  git restore falló con $ruta."; fallos=1; }
         else
-            git rm -q --cached --ignore-unmatch -- "$ruta" > /dev/null
+            git rm -q --cached --ignore-unmatch -- "$ruta" > /dev/null || { dice "  git rm falló con $ruta."; fallos=1; }
             rm -f -- "$ruta"
         fi
         n=$((n + 1))
     done
     (( n )) && dice "  $n archivo(s) sin commitear de $rol tras la sesión: copiados en ${dest#"$ROOT"/} y deshechos."
-    return 0
+    (( fallos == 0 ))
 }
 
 # --- Un lote: ciclos (sesión del rol y, si entrega, de auditor-calidad) hasta hecho o bloqueado -------------
@@ -392,7 +410,7 @@ lote() {
         if [[ -n "$duda" ]]; then linea_sesion "$id" "$rol" "$k" duda
         elif [[ -n "$entrega" ]]; then linea_sesion "$id" "$rol" "$k" entrega
         else linea_sesion "$id" "$rol" "$k" "$(motivo_sesion "sin fila")"; fi
-        limpiar "$rol" "$nombre"
+        limpiar "$rol" "$nombre" || { PARADA="no se pudo limpiar lo que dejó la sesión $nombre (ver arriba)"; terminar 1; }
         if [[ -n "$duda" ]]; then
             v="$(que_de "$duda")"
             bloquear "$id" "duda de $rol" "$rol" "${v#"Duda $id"}" "responderla y pasar el lote a pendiente para relanzarlo"
@@ -415,7 +433,7 @@ lote() {
             if [[ -n "$(filas_con auditor-calidad "Rechazo $id" <<< "$nuevas")" ]]; then veredicto=rechazo
             elif [[ -n "$(filas_con auditor-calidad "Validado $id" <<< "$nuevas")" ]]; then veredicto=validado; fi
             linea_sesion "$id" auditor-calidad "$k" "${veredicto:-$(motivo_sesion "sin fila")}"
-            limpiar auditor-calidad "$nombre"
+            limpiar auditor-calidad "$nombre" || { PARADA="no se pudo limpiar lo que dejó la sesión $nombre (ver arriba)"; terminar 1; }
             [[ -n "$veredicto" ]] && break
         done
         case "$veredicto" in
@@ -508,8 +526,11 @@ interrumpir() {
         dice "Interrumpido: parando la sesión $SESION_NOMBRE y todo lo que lanzó..."
         parar_arbol "$SESION_PID" 10 "$SESION_MARCA"
         wait "$SESION_PID" 2>/dev/null
-        limpiar "$SESION_ROL" "$SESION_NOMBRE"
-        PARADA+="; se paró la sesión $SESION_NOMBRE y lo que dejó sin commitear de $SESION_ROL está en sobras/"
+        if limpiar "$SESION_ROL" "$SESION_NOMBRE"; then
+            PARADA+="; se paró la sesión $SESION_NOMBRE y lo que dejó sin commitear de $SESION_ROL está en sobras/"
+        else
+            PARADA+="; se paró la sesión $SESION_NOMBRE, pero no se pudo limpiar lo que dejó (ver arriba)"
+        fi
         SESION_PID=""
     fi
     terminar "$1"

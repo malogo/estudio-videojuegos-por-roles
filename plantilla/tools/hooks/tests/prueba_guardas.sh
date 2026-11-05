@@ -77,8 +77,11 @@ espera_ok "git reset <archivo> permitido" orden "git reset docs/direccion/tablon
 espera_ok "git checkout HEAD -- <archivo> permitido" orden "git checkout HEAD -- docs/direccion/plan_nocturno.md"
 espera_ok "git restore --staged <carpeta> (solo el índice) permitido" orden "git restore --staged docs/"
 espera_ok "git checkout -b <rama> permitido" orden "git checkout -b nueva"
-# Lanzadores del motor de este despliegue (su ejecutable por defecto en motor_silencioso.sh), si tiene motor que vigilar
+# Lanzadores del motor de este despliegue (su ejecutable por defecto en motor_silencioso.sh), si tiene motor que vigilar.
+# Con el nombre del programa, no con la ruta: en Windows MOTOR_BIN suele ser la ruta completa (C:/.../Godot_v4.7.2-...exe),
+# que no cabe en un id de flatpak (la guarda se queda con lo que va tras el último punto: «exe»).
 BIN_MOTOR="$(sed -n 's/^MOTOR_BIN="\${MOTOR_BIN:-\(.*\)}"$/\1/p' tools/motor_silencioso.sh)"
+BIN_MOTOR="${BIN_MOTOR##*/}"; BIN_MOTOR="${BIN_MOTOR%%.*}"
 # shellcheck disable=SC2016
 if [[ -n "$BIN_MOTOR" ]] && bash -c 'source tools/hooks/reglas_comando.sh; _es_motor "$1"' _ "$BIN_MOTOR"; then
     espera_rechazo "flatpak run del motor bloqueado" "motor" orden "flatpak run org.ejemplo.$BIN_MOTOR --path ."
@@ -477,8 +480,13 @@ espera_codigo "--ejecutable con el motor falso -> 0 y su ruta" 0 "motor_falso.sh
 espera_codigo "--ejecutable sin motor -> 127" 127 "No se encuentra el ejecutable" env MOTOR_BIN="$TMP/no_existe" $MS --ejecutable
 espera_codigo "--ejecutable con ~/ y espacios -> 0" 0 "casa/motor con espacios.sh" env HOME="$TMP/casa" MOTOR_BIN='~/motor con espacios.sh' $MS --ejecutable
 espera_codigo "motor con ~/ y espacios en MOTOR_BIN se lanza -> 0" 0 "Resultado: 0" env HOME="$TMP/casa" MOTOR_BIN='~/motor con espacios.sh' $MS auditor-calidad
-# Un proceso detenido (SIGTTIN al leer la terminal desde otro grupo) no atiende TERM hasta que sigue: parar_arbol manda CONT
-PARADO="$( source tools/hooks/procesos.sh; set -m; sleep 60 > /dev/null 2>&1 & P=$!; set +m; kill -STOP "$P"
+# Un proceso detenido (SIGTTIN al leer la terminal desde otro grupo) no atiende TERM hasta que sigue: parar_arbol manda CONT.
+# Se detiene cuando ya es un programa nuevo (bash -c deja la marca y hace exec de sleep): hasta su exec, el hijo es una copia
+# de esta shell, que atrapa TERM, y un TERM que llega en ese hueco se pierde con el exec (en Linux pasaba casi siempre).
+PARADO="$( source tools/hooks/procesos.sh; L="$TMP/hijo_listo"; rm -f "$L"
+           set -m; bash -c 'echo > "$1"; exec sleep 60' _ "$L" > /dev/null 2>&1 & P=$!; set +m
+           for (( i = 0; i < 100; i++ )); do [[ -e "$L" ]] && break; sleep 0.1; done
+           kill -STOP "$P"
            t=$SECONDS; parar_arbol "$P" 10; wait "$P" 2>/dev/null
            if proceso_vivo "$P"; then v=vivo; kill -KILL "$P" 2>/dev/null; else v=muerto; fi
            echo "$(( SECONDS - t )) $v" )"
@@ -746,7 +754,7 @@ espera_codigo "sesión que deja un .git/index.lock suyo -> se quita y el lote si
 S="$(ls -d .despachador_logs/*/ | tail -n1)sobras/r1_A1_arquitecto-sistemas_1"
 if [[ ! -e .git/index.lock && -f "$S/tools/hooks/sobra_falsa.txt" ]] && arbol_limpio; then
     ok "... sin index.lock, con su sobra en sobras/ y el árbol limpio"
-else { git status --short; ls -a .git | grep lock; ls -R .despachador_logs; } > "$TMP/salida" 2>&1; mal "... sin index.lock, con su sobra en sobras/ y el árbol limpio"; fi
+else { git status --short; ls -d .git/*.lock; ls -R .despachador_logs; } > "$TMP/salida" 2>&1; mal "... sin index.lock, con su sobra en sobras/ y el árbol limpio"; fi
 
 escenario bloqueo_viejo 3 "10 USD por ronda" "$(lote A1 "ronda 1" ./tests/salto.sh)"
 guion "arquitecto-sistemas bloqueo_viejo"

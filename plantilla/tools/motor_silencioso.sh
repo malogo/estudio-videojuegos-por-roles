@@ -30,6 +30,7 @@ set -uo pipefail
 # --- Ejecutable del motor: una sola fuente (MOTOR_BIN o el valor por defecto, con `~/` expandido) ---------------------------
 MOTOR_BIN="${MOTOR_BIN:-{{BINARIO_MOTOR}}}"
 # En una variable el shell no expande `~`: se hace aquí (el lanzamiento y --ejecutable usan ya la ruta resuelta)
+# shellcheck disable=SC2088  # se busca el `~/` literal que trae MOTOR_BIN
 [[ "$MOTOR_BIN" == "~/"* ]] && MOTOR_BIN="${HOME:-}/${MOTOR_BIN#"~/"}"
 # Sin el ejecutable no hay nada que lanzar (en Windows no suele estar en el PATH: ruta completa, cuestionario.md B3)
 comprobar_ejecutable() {

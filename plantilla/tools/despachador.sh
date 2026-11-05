@@ -551,7 +551,7 @@ done
 # El motor que usarán las sesiones (MOTOR_BIN o el valor por defecto de motor_silencioso.sh; vacío = proyecto sin motor):
 # sin él, cada sesión empezaría con «command not found» y gastaría sus intentos. Lo resuelve motor_silencioso.sh
 # (--ejecutable: única fuente de la ruta, con `~/` y espacios), que ya avisa de cuál falta.
-MOTOR="$(./tools/motor_silencioso.sh --ejecutable)" \
+./tools/motor_silencioso.sh --ejecutable > /dev/null \
     || no_arranca "no se encuentra el ejecutable del motor (ni en el PATH ni como ruta; el aviso de arriba dice cuál): pon su ruta completa en MOTOR_BIN o en el valor por defecto de tools/motor_silencioso.sh (en Windows, p. ej. C:/Godot/Godot_v4.7.2-stable_win64_console.exe) y comprueba que ./tools/motor_silencioso.sh coordinador --version funciona."
 [[ "$(git config core.hooksPath)" == tools/hooks ]] \
     || no_arranca "core.hooksPath no es tools/hooks (git config core.hooksPath tools/hooks): sin los hooks de git no hay guardas."
